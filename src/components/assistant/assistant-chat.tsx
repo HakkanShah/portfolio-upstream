@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, Briefcase, Code2, GraduationCap } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, Briefcase, Code2, GraduationCap, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAssistant, speak } from '@/lib/assistant';
@@ -32,6 +32,8 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
         startVoiceToText,
         stopVoiceInput,
         setVoiceEnabled,
+        stopSpeaking,
+        suggestions: followUps,
     } = useAssistant();
 
     const [inputValue, setInputValue] = useState('');
@@ -81,39 +83,44 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
 
     const isThinking = state === 'thinking';
 
-    // Suggestion chips for quick questions
+    // Starter chips shown on the empty state
     const suggestions = [
-        { icon: Sparkles, label: 'Tell me about yourself', query: 'Tell me about yourself' },
-        { icon: Code2, label: 'What are your skills?', query: 'What are your skills and technologies?' },
-        { icon: Briefcase, label: 'Show me your projects', query: 'Show me your projects' },
-        { icon: GraduationCap, label: 'Your experience?', query: 'Tell me about your experience' },
+        { icon: Sparkles, label: 'Who is Hakkan?', query: 'Who is Hakkan?' },
+        { icon: Code2, label: 'His tech stack', query: 'What is his tech stack?' },
+        { icon: Briefcase, label: 'Show his projects', query: 'Show me his projects' },
+        { icon: GraduationCap, label: 'Is he open to work?', query: 'Is he open to work?' },
     ];
+
+    const lastMessage = messages[messages.length - 1];
+    const showFollowUps = !isThinking && !isListening && lastMessage?.role === 'assistant' && followUps.length > 0;
 
     return (
         <div className={cn('flex flex-col h-full', className)}>
             {/* Voice Mode UI - Compact controls at bottom, 3D bot is main focus in parent */}
             {mode === 'voice' ? (
-                <div className="p-4 border-t border-border bg-background/50 backdrop-blur-sm">
-                    {/* Compact Control Bar */}
+                <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-border bg-background/50 backdrop-blur-sm">
+                    {/* Control bar */}
                     <div className="flex items-center justify-center gap-4">
-                        {/* Status Text */}
-                        <div className="text-sm text-muted-foreground min-w-[100px] text-right">
+                        {/* Status */}
+                        <div className="text-sm min-w-[104px] text-right" aria-live="polite">
                             {isListening ? (
-                                <span className="text-primary font-medium">Listening...</span>
+                                <span className="text-primary font-medium">Listening…</span>
                             ) : isSpeaking ? (
-                                <span className="text-accent font-medium">Speaking...</span>
+                                <span className="text-accent font-medium">Speaking…</span>
                             ) : isThinking ? (
-                                <span className="text-amber-500 font-medium">Thinking...</span>
+                                <span className="text-amber-500 font-medium">Thinking…</span>
                             ) : (
-                                <span>Ready</span>
+                                <span className="text-muted-foreground">Ready</span>
                             )}
                         </div>
 
-                        {/* Mic Button */}
+                        {/* Mic */}
                         <Button
                             onClick={handleVoiceToggle}
                             size="lg"
                             disabled={!voiceSupported}
+                            aria-label={isListening ? 'Stop listening and send' : 'Start voice input'}
+                            title={isListening ? 'Stop and send' : 'Ask by voice'}
                             className={cn(
                                 'rounded-full w-16 h-16 transition-all duration-300',
                                 isListening
@@ -121,48 +128,71 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                     : 'bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30'
                             )}
                         >
-                            {isListening ? (
-                                <MicOff className="w-7 h-7" />
-                            ) : (
-                                <Mic className="w-7 h-7" />
-                            )}
+                            {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
                         </Button>
 
-                        {/* Voice Toggle */}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setVoiceEnabled(!voiceEnabled)}
-                            className={cn(
-                                'text-xs gap-1.5 rounded-full min-w-[100px]',
-                                voiceEnabled ? 'text-primary' : 'text-muted-foreground'
-                            )}
-                        >
-                            {voiceEnabled ? (
-                                <>
-                                    <Volume2 className="w-4 h-4" />
-                                    Voice On
-                                </>
+                        {/* Stop the answer, or toggle audio when nothing is playing */}
+                        <div className="min-w-[104px] flex justify-start">
+                            {isSpeaking ? (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={stopSpeaking}
+                                    aria-label="Stop speaking"
+                                    className="text-xs gap-1.5 rounded-full text-accent hover:text-accent"
+                                >
+                                    <Square className="w-3.5 h-3.5 fill-current" />
+                                    Stop
+                                </Button>
                             ) : (
-                                <>
-                                    <VolumeX className="w-4 h-4" />
-                                    Voice Off
-                                </>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setVoiceEnabled(!voiceEnabled)}
+                                    aria-label={voiceEnabled ? 'Mute answers' : 'Unmute answers'}
+                                    className={cn(
+                                        'text-xs gap-1.5 rounded-full',
+                                        voiceEnabled ? 'text-primary' : 'text-muted-foreground'
+                                    )}
+                                >
+                                    {voiceEnabled ? (
+                                        <>
+                                            <Volume2 className="w-4 h-4" />
+                                            Voice On
+                                        </>
+                                    ) : (
+                                        <>
+                                            <VolumeX className="w-4 h-4" />
+                                            Voice Off
+                                        </>
+                                    )}
+                                </Button>
                             )}
-                        </Button>
+                        </div>
                     </div>
 
-                    {/* Help text */}
-                    {!isListening && !isSpeaking && !isThinking && (
-                        <p className="text-xs text-muted-foreground text-center mt-3 animate-pulse">
-                            {voiceSupported ? 'Tap the microphone to start talking' : 'Voice not supported in this browser'}
-                        </p>
-                    )}
+                    {/* Hint */}
+                    <p className="text-xs text-muted-foreground text-center mt-3 min-h-[16px]">
+                        {!voiceSupported
+                            ? 'Voice input needs Chrome, Edge or Safari — switch to Text mode.'
+                            : isListening
+                                ? 'Speak naturally — I stop automatically when you pause.'
+                                : isSpeaking
+                                    ? 'Tap the mic to interrupt me.'
+                                    : isThinking
+                                        ? ' '
+                                        : 'Tap the mic and ask about his projects, stack or experience.'}
+                    </p>
                 </div>
             ) : (
                 <>
                     {/* Text Mode: Messages Area */}
-                    <div className="flex-1 overflow-y-auto py-4 space-y-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent overscroll-contain">
+                    <div
+                        className="flex-1 overflow-y-auto py-4 space-y-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent overscroll-contain"
+                        role="log"
+                        aria-live="polite"
+                        aria-label="Conversation"
+                    >
                         {/* Welcome Screen when no messages */}
                         {messages.length === 0 ? (
                             <motion.div
@@ -225,6 +255,30 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                             </AnimatePresence>
                         )}
 
+                        {/* Context-aware follow-ups for the latest answer */}
+                        {showFollowUps && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex flex-wrap gap-2 px-3 pt-2 pb-1"
+                            >
+                                {followUps.map((followUp) => (
+                                    <button
+                                        key={followUp}
+                                        onClick={() => sendMessage(followUp)}
+                                        className={cn(
+                                            'px-3 py-1.5 rounded-full text-xs font-medium',
+                                            'bg-primary/10 hover:bg-primary/20 border border-primary/20',
+                                            'text-foreground/90 transition-all duration-200',
+                                            'hover:border-primary/40 active:scale-95'
+                                        )}
+                                    >
+                                        {followUp}
+                                    </button>
+                                ))}
+                            </motion.div>
+                        )}
+
                         {/* Thinking indicator */}
                         {isThinking && (
                             <motion.div
@@ -263,7 +317,7 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                     </div>
 
                     {/* Text Mode: Input Area */}
-                    <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4 pb-6 md:pb-4">
+                    <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4">
                         {/* Voice Controls Row */}
                         {voiceSupported && (
                             <div className="flex items-center justify-between mb-3">
@@ -272,6 +326,7 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setVoiceEnabled(!voiceEnabled)}
+                                        aria-label={voiceEnabled ? 'Mute spoken answers' : 'Unmute spoken answers'}
                                         className={cn(
                                             'text-xs gap-1.5 h-9 px-3', // Increased touch target
                                             voiceEnabled ? 'text-primary' : 'text-muted-foreground'
@@ -291,12 +346,16 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                     </Button>
                                 </div>
 
-                                {/* Speaking indicator */}
+                                {/* Speaking indicator — also the stop control */}
                                 {isSpeaking && (
-                                    <motion.div
+                                    <motion.button
+                                        type="button"
+                                        onClick={stopSpeaking}
+                                        aria-label="Stop speaking"
+                                        title="Stop speaking"
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="flex items-center gap-2 text-xs text-accent"
+                                        className="flex items-center gap-2 text-xs text-accent hover:opacity-80 transition-opacity"
                                     >
                                         <div className="flex gap-0.5">
                                             {[...Array(4)].map((_, i) => (
@@ -314,8 +373,8 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                                 />
                                             ))}
                                         </div>
-                                        <span>Speaking...</span>
-                                    </motion.div>
+                                        <span>Speaking — tap to stop</span>
+                                    </motion.button>
                                 )}
                             </div>
                         )}
@@ -327,6 +386,8 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                 type="text"
                                 placeholder={isListening ? 'Speak now... 🎤' : 'Ask me anything...'}
                                 value={inputValue}
+                                maxLength={400}
+                                aria-label="Ask the assistant a question"
                                 onChange={(e) => setInputValue(e.target.value)}
                                 className="flex-1 border-2 border-foreground/20 focus:border-primary transition-colors text-base" // text-base prevents iOS zoom
                             />
@@ -344,7 +405,8 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                             ? 'bg-primary border-primary animate-pulse'
                                             : 'border-foreground/20 hover:border-primary'
                                     )}
-                                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                                    title={isListening ? 'Stop listening' : 'Dictate your question'}
+                                    aria-label={isListening ? 'Stop listening' : 'Dictate your question'}
                                 >
                                     {isListening ? (
                                         <MicOff className="w-5 h-5" />

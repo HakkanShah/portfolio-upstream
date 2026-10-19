@@ -5,7 +5,7 @@
  * Floating button with expandable chat panel
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { MessageCircle, X, Minimize2, Sparkles, MessageSquareText, Mic } from 'lucide-react';
@@ -29,11 +29,41 @@ const Assistant3DBot = dynamic(() => import('./assistant-3d-bot'), {
 
 type ChatMode = 'text' | 'voice';
 
+const CHAT_MODE_KEY = 'hakkan_assistant_chat_mode';
+const NUDGE_DISMISSED_KEY = 'hakkan_assistant_nudge_dismissed';
+const NUDGE_SHOWN_KEY = 'hakkan_assistant_nudge_shown';
+
+/** Two questions worth a single tap, shown on the nudge. */
+const NUDGE_CHIPS = ['Show his projects', 'Is he open to work?'];
+
+const readChatMode = (): ChatMode => {
+    if (typeof window === 'undefined') return 'voice';
+    try {
+        return window.localStorage.getItem(CHAT_MODE_KEY) === 'text' ? 'text' : 'voice';
+    } catch {
+        return 'voice';
+    }
+};
+
 const AssistantInner: React.FC = () => {
-    const { isOpen, setIsOpen, state, voiceEnabled, addMessage, caption } = useAssistant();
+    const { isOpen, setIsOpen, state, voiceEnabled, messages, caption, sendMessage } = useAssistant();
     const [isMinimized, setIsMinimized] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [chatMode, setChatMode] = useState<ChatMode>('voice');
+    const [chatMode, setChatModeState] = useState<ChatMode>('voice');
+
+    // Remember how this visitor prefers to talk to the assistant.
+    useEffect(() => {
+        setChatModeState(readChatMode());
+    }, []);
+
+    const setChatMode = useCallback((mode: ChatMode) => {
+        setChatModeState(mode);
+        try {
+            window.localStorage.setItem(CHAT_MODE_KEY, mode);
+        } catch {
+            // Private mode — the preference just won't persist.
+        }
+    }, []);
     const dragControls = useDragControls();
     const constraintsRef = useRef(null);
 
@@ -97,77 +127,100 @@ const AssistantInner: React.FC = () => {
         );
     };
 
-    // Auto-Greeting Sequence
-    // Auto-Greeting Sequence
-    const [showWelcomeText, setShowWelcomeText] = useState(false);
+    // The assistant never takes over the screen on its own. Once the visitor
+    // has actually engaged with the page, it offers a small, dismissible
+    // nudge next to its button — tapping it is what opens the chat.
+    const [showNudge, setShowNudge] = useState(false);
+
+    const dismissNudge = useCallback((permanently: boolean) => {
+        setShowNudge(false);
+        if (!permanently) return;
+        try {
+            window.localStorage.setItem(NUDGE_DISMISSED_KEY, 'true');
+        } catch {
+            // Private mode — it just won't be remembered.
+        }
+    }, []);
+
+    const openFromNudge = useCallback(
+        (question?: string) => {
+            setShowNudge(false);
+            setIsOpen(true);
+            if (!question) return;
+            // A typed question deserves a readable answer, so land in text mode.
+            setChatMode('text');
+            // Let the panel mount before the question lands in it.
+            setTimeout(() => sendMessage(question), 350);
+        },
+        [setIsOpen, sendMessage, setChatMode]
+    );
 
     useEffect(() => {
-        const hasGreeted = sessionStorage.getItem('hakkan_assistant_welcome_shown');
-        if (hasGreeted) return;
+        if (isOpen) return;
 
-        let interactionTimer: NodeJS.Timeout;
+        try {
+            if (window.localStorage.getItem(NUDGE_DISMISSED_KEY)) return;
+            if (window.sessionStorage.getItem(NUDGE_SHOWN_KEY)) return;
+        } catch {
+            return;
+        }
 
-        const handleInteraction = () => {
-            // Remove listeners immediately to prevent multiple triggers
-            window.removeEventListener('click', handleInteraction);
-            window.removeEventListener('keydown', handleInteraction);
-            window.removeEventListener('touchstart', handleInteraction);
+        let dwellTimer: NodeJS.Timeout;
+        let hideTimer: NodeJS.Timeout;
 
-            // Wait 7 seconds before triggering the assistant
-            interactionTimer = setTimeout(() => {
-                if (sessionStorage.getItem('hakkan_assistant_welcome_shown')) return;
-                sessionStorage.setItem('hakkan_assistant_welcome_shown', 'true');
-
-                setIsOpen(true);
-                setShowWelcomeText(true);
-
-                setTimeout(() => {
-                    const messageText = "Hello! Welcome to Hakkan's portfolio. You can find his latest projects, technical skills, and professional experience here. I'm his AI assistant, ready to help. Just ping me for anything you want to ask further!";
-
-                    addMessage({
-                        role: 'assistant',
-                        content: messageText,
-                    });
-
-                    if (voiceEnabled) {
-                        const startTime = Date.now();
-                        speak(
-                            messageText,
-                            () => {
-                                setShowWelcomeText(false);
-                                const elapsed = Date.now() - startTime;
-                                const waitTime = elapsed < 1000 ? 8000 : 1000;
-
-                                setTimeout(() => {
-                                    setIsOpen(false);
-                                    setOverrideState(null);
-                                }, waitTime);
-                            },
-                            () => {
-                                setOverrideState('speaking');
-                            }
-                        );
-                    } else {
-                        setTimeout(() => {
-                            setShowWelcomeText(false);
-                            setIsOpen(false);
-                        }, 8000);
-                    }
-                }, 500);
-            }, 7000); // 7 second delay
+        const show = () => {
+            try {
+                if (window.sessionStorage.getItem(NUDGE_SHOWN_KEY)) return;
+                window.sessionStorage.setItem(NUDGE_SHOWN_KEY, 'true');
+            } catch {
+                return;
+            }
+            cleanup();
+            setShowNudge(true);
+            // It bows out by itself if ignored — no modal, no trap.
+            hideTimer = setTimeout(() => setShowNudge(false), 13000);
         };
 
-        window.addEventListener('click', handleInteraction);
-        window.addEventListener('keydown', handleInteraction);
-        window.addEventListener('touchstart', handleInteraction);
+        const onScroll = () => {
+            const scrollable = document.body.scrollHeight - window.innerHeight;
+            if (scrollable > 0 && window.scrollY / scrollable > 0.18) show();
+        };
+
+        const cleanup = () => {
+            window.removeEventListener('scroll', onScroll);
+            if (dwellTimer) clearTimeout(dwellTimer);
+        };
+
+        // Whichever comes first: they've read a bit, or they've stayed a while.
+        window.addEventListener('scroll', onScroll, { passive: true });
+        dwellTimer = setTimeout(show, 25000);
 
         return () => {
-            window.removeEventListener('click', handleInteraction);
-            window.removeEventListener('keydown', handleInteraction);
-            window.removeEventListener('touchstart', handleInteraction);
-            if (interactionTimer) clearTimeout(interactionTimer);
+            cleanup();
+            if (hideTimer) clearTimeout(hideTimer);
         };
-    }, [voiceEnabled, setIsOpen, speak, addMessage]);
+    }, [isOpen]);
+
+    // Opening the chat retires the nudge for good.
+    useEffect(() => {
+        if (!isOpen) return;
+        setShowNudge(false);
+        try {
+            window.localStorage.setItem(NUDGE_DISMISSED_KEY, 'true');
+        } catch {
+            // Ignore.
+        }
+    }, [isOpen]);
+
+    // A bottom sheet that lets the page scroll behind it feels broken.
+    useEffect(() => {
+        if (!isMobile || !isOpen) return;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isMobile, isOpen]);
 
     // Check for mobile
     useEffect(() => {
@@ -202,8 +255,60 @@ const AssistantInner: React.FC = () => {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                        className="fixed bottom-6 right-6 z-50"
+                        className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3"
                     >
+                        {/* Nudge: an offer, not an interruption */}
+                        <AnimatePresence>
+                            {showNudge && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                                    transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                                    className="w-[min(17rem,calc(100vw-3rem))] rounded-2xl border border-border bg-background/95 backdrop-blur-md p-3 shadow-2xl"
+                                >
+                                    <div className="flex items-start gap-2">
+                                        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 border border-primary/30">
+                                            <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => openFromNudge()}
+                                            className="flex-1 text-left"
+                                        >
+                                            <p className="text-sm font-medium leading-snug">
+                                                Need a quick answer about Hakkan?
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
+                                                I know his projects, stack and experience.
+                                            </p>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => dismissNudge(true)}
+                                            aria-label="Dismiss assistant suggestion"
+                                            className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                        {NUDGE_CHIPS.map((chip) => (
+                                            <button
+                                                key={chip}
+                                                type="button"
+                                                onClick={() => openFromNudge(chip)}
+                                                className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] font-medium transition-colors hover:border-primary/50 hover:bg-primary/20"
+                                            >
+                                                {chip}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         <div className="flex items-center gap-3">
                             {/* Speech Bubble Tooltip - slides out from button */}
                             <motion.div
@@ -218,7 +323,11 @@ const AssistantInner: React.FC = () => {
                                     times: [0, 0.1, 0.85, 1],
                                     ease: "easeOut"
                                 }}
-                                className="relative whitespace-nowrap bg-background/95 backdrop-blur-sm border border-border rounded-2xl px-4 py-2.5 shadow-xl"
+                                className={cn(
+                                    'relative whitespace-nowrap bg-background/95 backdrop-blur-sm border border-border rounded-2xl px-4 py-2.5 shadow-xl',
+                                    'hidden sm:block',
+                                    showNudge && 'sm:hidden'
+                                )}
                             >
                                 <span className="flex items-center gap-2 text-sm">
                                     <Sparkles className="w-3 h-3 text-primary" />
@@ -271,32 +380,63 @@ const AssistantInner: React.FC = () => {
                         {!isMobile && (
                             <div ref={constraintsRef} className="fixed inset-4 pointer-events-none z-40" />
                         )}
+
+                        {/* Mobile scrim — dims the page and closes on tap */}
+                        {isMobile && (
+                            <motion.div
+                                key="assistant-scrim"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                onClick={() => setIsOpen(false)}
+                                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
+                                aria-hidden="true"
+                            />
+                        )}
                         <motion.div
                             key="assistant-panel"
-                            drag={!isMobile}
+                            role="dialog"
+                            aria-label="Hakkan's portfolio assistant"
+                            drag={isMobile ? 'y' : true}
                             dragListener={false}
                             dragControls={dragControls}
-                            dragConstraints={constraintsRef}
-                            dragElastic={0.05}
+                            dragConstraints={isMobile ? { top: 0, bottom: 0 } : constraintsRef}
+                            dragElastic={isMobile ? { top: 0, bottom: 0.4 } : 0.05}
                             dragMomentum={false}
+                            onDragEnd={(_event, info) => {
+                                // A flick or a decent pull down dismisses the sheet.
+                                if (isMobile && (info.offset.y > 110 || info.velocity.y > 650)) {
+                                    setIsOpen(false);
+                                }
+                            }}
                             initial={isMobile ? { y: '100%' } : { opacity: 0, scale: 0.9, x: 20 }}
                             animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, x: 0 }}
                             exit={isMobile ? { y: '100%' } : { opacity: 0, scale: 0.9, x: 20 }}
                             transition={{ type: 'spring', stiffness: 260, damping: 24 }} // Smoother spring for mobile sheet
                             className={cn(
-                                'fixed z-50 bg-background/95 backdrop-blur-xl shadow-2xl overflow-hidden',
-                                'flex flex-col no-click-effect',
+                                'fixed z-50 shadow-2xl overflow-hidden flex flex-col no-click-effect',
                                 isMobile
-                                    ? 'bottom-0 left-0 right-0 h-[92dvh] rounded-t-[2rem] border-t-2 border-l-0 border-r-0 border-primary/20' // Bottom sheet look
+                                    // Opaque: a translucent sheet lets the page bleed through and looks broken.
+                                    ? 'bottom-0 left-0 right-0 h-[86dvh] max-h-[86dvh] rounded-t-3xl border-t border-border bg-background'
                                     : isMinimized
-                                        ? 'bottom-6 right-6 w-80 h-16 rounded-2xl border-2 border-foreground'
-                                        : 'bottom-6 right-6 w-[400px] h-[600px] max-h-[80vh] rounded-2xl border-2 border-foreground'
+                                        ? 'bottom-6 right-6 w-80 h-16 rounded-2xl border-2 border-foreground bg-background/95 backdrop-blur-xl'
+                                        : 'bottom-6 right-6 w-[400px] h-[600px] max-h-[80vh] rounded-2xl border-2 border-foreground bg-background/95 backdrop-blur-xl'
                             )}
                         >
                             {/* Mobile Drag Handle Visual */}
                             {isMobile && (
-                                <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing" onClick={() => setIsOpen(false)}>
-                                    <div className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
+                                <div
+                                    className="w-full flex justify-center pt-3 pb-1.5 touch-none cursor-grab active:cursor-grabbing"
+                                    onPointerDown={(event) => dragControls.start(event)}
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label="Drag down to close"
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') setIsOpen(false);
+                                    }}
+                                >
+                                    <div className="w-10 h-1.5 rounded-full bg-muted-foreground/40" />
                                 </div>
                             )}
 
@@ -311,10 +451,10 @@ const AssistantInner: React.FC = () => {
                                     !isMobile && "cursor-move"
                                 )}
                             >
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
                                     {/* 3D Bot mini avatar with online indicator */}
-                                    <div className="relative">
-                                        <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 border-2 border-primary/30 flex items-center justify-center">
+                                    <div className="relative shrink-0">
+                                        <div className="w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden bg-gradient-to-br from-primary/20 to-accent/20 border-2 border-primary/30 flex items-center justify-center">
                                             <Assistant3DBot state={state} size="sm" className="w-12 h-12 scale-110" />
                                         </div>
                                         {/* Online indicator dot */}
@@ -322,10 +462,10 @@ const AssistantInner: React.FC = () => {
                                             <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
                                         </span>
                                     </div>
-                                    <div>
-                                        <h3 className="text-sm font-semibold flex items-center gap-2">
-                                            Hakkan&apos;s Assistant
-                                            <span className="text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded-md border border-amber-500/20 whitespace-nowrap">
+                                    <div className="min-w-0">
+                                        <h3 className="text-sm font-semibold flex items-center gap-2 truncate">
+                                            <span className="truncate">Hakkan&apos;s Assistant</span>
+                                            <span className="hidden sm:inline text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded-md border border-amber-500/20 whitespace-nowrap">
                                                 In Development
                                             </span>
                                         </h3>
@@ -343,7 +483,7 @@ const AssistantInner: React.FC = () => {
                                             onClick={() => setIsMinimized(!isMinimized)}
                                             className="h-8 w-8"
                                             title={isMinimized ? 'Expand' : 'Minimize'}
-                                            disabled={state === 'speaking' || state === 'thinking'}
+                                            aria-label={isMinimized ? 'Expand assistant' : 'Minimize assistant'}
                                         >
                                             <Minimize2 className="w-4 h-4" />
                                         </Button>
@@ -353,8 +493,8 @@ const AssistantInner: React.FC = () => {
                                         size="icon"
                                         onClick={() => setIsOpen(false)}
                                         className="h-8 w-8"
-                                        title="Close"
-                                        disabled={state === 'speaking' || state === 'thinking'}
+                                        title="Close (Esc)"
+                                        aria-label="Close assistant"
                                     >
                                         <X className="w-4 h-4" />
                                     </Button>
@@ -363,38 +503,30 @@ const AssistantInner: React.FC = () => {
 
                             {/* Mode Tabs */}
                             {!isMinimized && (
-                                <div className="flex border-b border-border bg-muted/10">
+                                <div className="flex border-b border-border bg-muted/10" role="tablist" aria-label="Assistant mode">
                                     <button
-                                        onClick={() => {
-                                            if (state !== 'speaking' && state !== 'thinking') {
-                                                setChatMode('voice');
-                                            }
-                                        }}
-                                        disabled={state === 'speaking' || state === 'thinking'}
+                                        onClick={() => setChatMode('voice')}
+                                        role="tab"
+                                        aria-selected={chatMode === 'voice'}
                                         className={cn(
                                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all',
                                             chatMode === 'voice'
                                                 ? 'text-primary border-b-2 border-primary bg-primary/5'
-                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30',
-                                            (state === 'speaking' || state === 'thinking') && 'opacity-50 cursor-not-allowed'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
                                         )}
                                     >
                                         <Mic className="w-4 h-4" />
                                         <span>Voice</span>
                                     </button>
                                     <button
-                                        onClick={() => {
-                                            if (state !== 'speaking' && state !== 'thinking') {
-                                                setChatMode('text');
-                                            }
-                                        }}
-                                        disabled={state === 'speaking' || state === 'thinking'}
+                                        onClick={() => setChatMode('text')}
+                                        role="tab"
+                                        aria-selected={chatMode === 'text'}
                                         className={cn(
                                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all',
                                             chatMode === 'text'
                                                 ? 'text-primary border-b-2 border-primary bg-primary/5'
-                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30',
-                                            (state === 'speaking' || state === 'thinking') && 'opacity-50 cursor-not-allowed'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
                                         )}
                                     >
                                         <MessageSquareText className="w-4 h-4" />
@@ -412,7 +544,7 @@ const AssistantInner: React.FC = () => {
                                             {/* 3D Bot - Main Attraction */}
                                             <div
                                                 className={cn(
-                                                    "flex-1 flex items-center justify-center bg-gradient-to-b from-muted/10 to-background relative overflow-hidden",
+                                                    "flex-1 min-h-0 flex items-center justify-center bg-gradient-to-b from-muted/10 to-background relative overflow-hidden",
                                                     // Disable pointer events during active states
                                                     (state === 'speaking' || state === 'thinking' || state === 'listening') && 'cursor-default'
                                                 )}
@@ -483,26 +615,6 @@ const AssistantInner: React.FC = () => {
                                                     )}
                                                 </AnimatePresence>
 
-                                                {/* Welcome Text Overlay */}
-                                                <AnimatePresence>
-                                                    {showWelcomeText && !caption && ( // Hide welcome if caption is showing
-                                                        <motion.div
-                                                            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                            exit={{ opacity: 0, scale: 1.5, filter: 'blur(10px)' }}
-                                                            transition={{ type: 'spring', duration: 0.8 }}
-                                                            className="absolute bottom-2 left-0 right-0 z-20 flex justify-center pointer-events-none"
-                                                        >
-                                                            <div className="relative">
-                                                                <h2 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary via-purple-500 to-accent drop-shadow-2xl animate-pulse">
-                                                                    Hello!
-                                                                </h2>
-                                                                <Sparkles className="absolute -top-4 -right-6 w-8 h-8 text-yellow-400 animate-bounce" />
-                                                                <Sparkles className="absolute -bottom-2 -left-6 w-6 h-6 text-purple-400 animate-pulse delay-100" />
-                                                            </div>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
                                             </div>
 
                                             {/* Voice Controls Section */}

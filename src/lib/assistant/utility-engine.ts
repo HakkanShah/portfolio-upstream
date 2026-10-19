@@ -4,7 +4,7 @@
  * No AI - just math, time, date, and identity facts
  */
 
-import { optimizeForSpeech } from './smart-response-engine';
+import { optimizeForSpeech } from './speech-utils';
 
 // ============ Types ============
 
