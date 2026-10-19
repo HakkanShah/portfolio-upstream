@@ -177,6 +177,20 @@ the rough edges handled:
 - Tap the mic while it's talking to interrupt it; audio on/off and your
   preferred mode (voice or text) are remembered between visits
 
+### How it introduces itself
+
+The assistant never takes over the screen. Once a visitor has actually engaged
+with the page (scrolled ~20% in, or stayed ~25s), a small card appears next to
+the chat button offering a couple of one-tap questions. Tap it to open the
+chat, tap **×** and it never asks again on that device. Nothing is spoken until
+you open it — the greeting is silent, answers are not.
+
+### On mobile
+
+The chat is a proper bottom sheet: it dims the page behind it, locks the page
+scroll, is fully opaque (no site content bleeding through), respects the home
+indicator safe area, and can be swiped down to dismiss from its handle.
+
 ### Keeping it honest
 
 `npm run assistant:eval` runs 120 real visitor questions and asserts what each

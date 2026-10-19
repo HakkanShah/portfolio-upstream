@@ -98,7 +98,7 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
         <div className={cn('flex flex-col h-full', className)}>
             {/* Voice Mode UI - Compact controls at bottom, 3D bot is main focus in parent */}
             {mode === 'voice' ? (
-                <div className="p-4 border-t border-border bg-background/50 backdrop-blur-sm">
+                <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-border bg-background/50 backdrop-blur-sm">
                     {/* Control bar */}
                     <div className="flex items-center justify-center gap-4">
                         {/* Status */}
@@ -317,7 +317,7 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                     </div>
 
                     {/* Text Mode: Input Area */}
-                    <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4 pb-6 md:pb-4">
+                    <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4">
                         {/* Voice Controls Row */}
                         {voiceSupported && (
                             <div className="flex items-center justify-between mb-3">

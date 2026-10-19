@@ -382,7 +382,9 @@ export const welcomeAnswer = (): BrainAnswer =>
         'welcome',
         `Hey! 👋 I'm ${OWNER.firstName}'s portfolio assistant. I know his **${getProjects().length} projects**, his stack, his internships and how to reach him — ask me anything, or tap a suggestion below.`,
         {
-            speak: `Hey! I'm ${OWNER.firstName}'s portfolio assistant. I know his projects, his stack, his internships and how to reach him. Ask me anything.`,
+            // Deliberately silent: nobody expects a website to start talking at
+            // them. Answers are spoken; the greeting is not.
+            speak: '',
             chips: ['Show his projects', 'His tech stack', 'Is he open to work?'],
         }
     );

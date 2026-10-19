@@ -46,6 +46,9 @@ export const GITHUB_STATS = {
 
 // ============ Helpers ============
 
+/** Ends a sentence without doubling a full stop ("PVT. LTD." + "." = "LTD..") */
+const endSentence = (text: string): string => (text.trim().endsWith('.') ? text.trim() : `${text.trim()}.`);
+
 const slug = (value: string): string =>
     normalize(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -561,7 +564,7 @@ const aboutCards = (): KnowledgeCard[] => [
             '',
             `Right now he's a Full Stack Developer Intern at ${EXPERIENCE[0].company} and has shipped ${PROJECTS.length} public projects.`,
         ].join('\n'),
-        speak: `${OWNER.fullName} is a full-stack developer and final-year B.Tech Computer Science student from Kolkata. He builds web apps with React, Next.js and TypeScript, integrates AI APIs, and has shipped ${PROJECTS.length} public projects. He's currently a full stack developer intern at ${EXPERIENCE[0].company}.`,
+        speak: `${OWNER.fullName} is a full-stack developer and final-year B.Tech Computer Science student from Kolkata. He builds web apps with React, Next.js and TypeScript, integrates AI APIs, and has shipped ${PROJECTS.length} public projects. He's currently a full stack developer intern at ${endSentence(EXPERIENCE[0].company)}`,
         section: 'about',
         chips: ['His projects', 'His skills', 'Is he open to work?'],
         weight: 1.25,
@@ -594,11 +597,11 @@ const faqCards = (): KnowledgeCard[] => {
             body: [
                 `Yes — ${OWNER.firstName} is open to **full-time roles, internships and freelance work**.`,
                 '',
-                `He graduates in ${EDUCATION[0].period.split('–')[1]?.trim() ?? '2026'} and is currently interning as a ${EXPERIENCE[0].role} at ${EXPERIENCE[0].company}.`,
+                `He graduates in ${EDUCATION[0].period.split('–')[1]?.trim() ?? '2026'} and is currently interning as a ${EXPERIENCE[0].role} at ${endSentence(EXPERIENCE[0].company)}`,
                 '',
                 `Fastest route: 📧 [${OWNER.email}](mailto:${OWNER.email}) — or use the contact form below.`,
             ].join('\n'),
-            speak: `Yes, he's open to full-time roles, internships and freelance work. He graduates in 2026 and is currently interning at ${EXPERIENCE[0].company}. The fastest way to reach him is email.`,
+            speak: `Yes, he's open to full-time roles, internships and freelance work. He graduates in 2026 and is currently interning at ${endSentence(EXPERIENCE[0].company)} The fastest way to reach him is email.`,
             section: 'contact',
             chips: ['His experience', 'Download his CV', 'His email'],
             weight: 1.15,
@@ -613,7 +616,7 @@ const faqCards = (): KnowledgeCard[] => {
                 `A few concrete reasons:`,
                 '',
                 `• **Ships end to end** — ${PROJECTS.length} public projects, from a Windows utility in .NET to AI web apps.`,
-                `• **Real production experience** — two internships, including payment-gateway and e-commerce work at ${EXPERIENCE[0].company}.`,
+                `• **Real production experience** — two internships, including payment-gateway and e-commerce work at ${endSentence(EXPERIENCE[0].company)}`,
                 `• **Modern stack, done properly** — Next.js, TypeScript, Postgres/Prisma, Tailwind, deployed on Vercel.`,
                 `• **AI integration is routine for him** — Gemini powers MockHick, VerifyAI, BuildMyCV and AluChat.`,
                 `• **Consistent** — ${GITHUB_STATS.publicRepos} public repos and a ${GITHUB_STATS.longestStreak} GitHub streak.`,
