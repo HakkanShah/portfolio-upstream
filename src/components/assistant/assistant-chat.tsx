@@ -32,6 +32,7 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
         startVoiceToText,
         stopVoiceInput,
         setVoiceEnabled,
+        suggestions: followUps,
     } = useAssistant();
 
     const [inputValue, setInputValue] = useState('');
@@ -81,13 +82,16 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
 
     const isThinking = state === 'thinking';
 
-    // Suggestion chips for quick questions
+    // Starter chips shown on the empty state
     const suggestions = [
-        { icon: Sparkles, label: 'Tell me about yourself', query: 'Tell me about yourself' },
-        { icon: Code2, label: 'What are your skills?', query: 'What are your skills and technologies?' },
-        { icon: Briefcase, label: 'Show me your projects', query: 'Show me your projects' },
-        { icon: GraduationCap, label: 'Your experience?', query: 'Tell me about your experience' },
+        { icon: Sparkles, label: 'Who is Hakkan?', query: 'Who is Hakkan?' },
+        { icon: Code2, label: 'His tech stack', query: 'What is his tech stack?' },
+        { icon: Briefcase, label: 'Show his projects', query: 'Show me his projects' },
+        { icon: GraduationCap, label: 'Is he open to work?', query: 'Is he open to work?' },
     ];
+
+    const lastMessage = messages[messages.length - 1];
+    const showFollowUps = !isThinking && !isListening && lastMessage?.role === 'assistant' && followUps.length > 0;
 
     return (
         <div className={cn('flex flex-col h-full', className)}>
@@ -223,6 +227,30 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                     />
                                 ))}
                             </AnimatePresence>
+                        )}
+
+                        {/* Context-aware follow-ups for the latest answer */}
+                        {showFollowUps && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex flex-wrap gap-2 px-3 pt-2 pb-1"
+                            >
+                                {followUps.map((followUp) => (
+                                    <button
+                                        key={followUp}
+                                        onClick={() => sendMessage(followUp)}
+                                        className={cn(
+                                            'px-3 py-1.5 rounded-full text-xs font-medium',
+                                            'bg-primary/10 hover:bg-primary/20 border border-primary/20',
+                                            'text-foreground/90 transition-all duration-200',
+                                            'hover:border-primary/40 active:scale-95'
+                                        )}
+                                    >
+                                        {followUp}
+                                    </button>
+                                ))}
+                            </motion.div>
                         )}
 
                         {/* Thinking indicator */}

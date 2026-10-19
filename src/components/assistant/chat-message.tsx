@@ -6,6 +6,7 @@
  * Supports user, assistant, and system (error/info) messages
  */
 
+import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { User, Bot, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,28 +30,58 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const isSystem = role === 'system';
     const isError = messageType === 'error';
 
-    // Simple markdown-like formatting (bold and italic)
+    // Lightweight markdown: links, bold and italic
     const formatContent = (text: string) => {
-        // Handle bold (**text**)
-        let parts = text.split(/(\*\*.*?\*\*)/g);
-        return parts.map((part, i) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-                return (
-                    <strong key={i} className="font-semibold text-primary">
-                        {part.slice(2, -2)}
+        const pattern = /\[([^\]]+)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*|\*([^*\n]+)\*/g;
+        const nodes: ReactNode[] = [];
+        let cursor = 0;
+        let match: RegExpExecArray | null;
+
+        while ((match = pattern.exec(text)) !== null) {
+            if (match.index > cursor) nodes.push(text.slice(cursor, match.index));
+
+            const [token, linkLabel, linkHref, boldText, italicText] = match;
+
+            if (linkLabel && linkHref) {
+                // Only allow schemes that make sense in a chat bubble
+                const isSafe = /^(?:https?:|mailto:|tel:|#|\/)/i.test(linkHref);
+                const isExternal = /^https?:/i.test(linkHref);
+                nodes.push(
+                    isSafe ? (
+                        <a
+                            key={`${match.index}-link`}
+                            href={linkHref}
+                            target={isExternal ? '_blank' : undefined}
+                            rel={isExternal ? 'noopener noreferrer' : undefined}
+                            className="font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary"
+                        >
+                            {linkLabel}
+                        </a>
+                    ) : (
+                        linkLabel
+                    )
+                );
+            } else if (boldText) {
+                nodes.push(
+                    <strong key={`${match.index}-b`} className="font-semibold text-primary">
+                        {boldText}
                     </strong>
                 );
-            }
-            // Handle italic (*text*)
-            if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
-                return (
-                    <em key={i} className="italic opacity-80">
-                        {part.slice(1, -1)}
+            } else if (italicText) {
+                nodes.push(
+                    <em key={`${match.index}-i`} className="italic opacity-80">
+                        {italicText}
                     </em>
                 );
+            } else {
+                nodes.push(token);
             }
-            return part;
-        });
+
+            cursor = match.index + token.length;
+        }
+
+        if (cursor < text.length) nodes.push(text.slice(cursor));
+        return nodes;
     };
 
     // System message (error/info)

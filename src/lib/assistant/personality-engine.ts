@@ -4,7 +4,7 @@
  * Provides witty, entertaining responses that match the tone
  */
 
-import { optimizeForSpeech } from './smart-response-engine';
+import { optimizeForSpeech } from './speech-utils';
 
 // ============ Types ============
 
