@@ -155,6 +155,28 @@ from the browser). The route caches repeat questions for 15 minutes and rate
 limits to 10 requests per IP per 5 minutes, so a single visitor can't burn
 through the quota.
 
+### Voice mode
+
+Speech recognition and synthesis both use the browser's Web Speech API, with
+the rough edges handled:
+
+- **Long answers don't get cut off** — Chrome stops speaking after ~15s of one
+  utterance, so answers are split into sentence-sized chunks and spoken as a
+  queue (abbreviations like "PVT. LTD." don't cause a false split)
+- **Captions follow the audio** — each caption appears as its chunk is actually
+  spoken, instead of being guessed from a words-per-minute estimate
+- **It never gets stuck** — if speech fails to start (no voices installed,
+  muted tab), a watchdog releases the UI instead of leaving the bot mid-animation
+- **No duplicate questions** — a result arriving after you cancel, or a pause
+  auto-submit racing the stop button, can no longer send the same thing twice
+- **Recognition is biased toward the portfolio** — project names, aliases and
+  technologies are pulled from the knowledge graph, so a lower-ranked
+  alternative naming a real project beats a cleaner-sounding wrong guess
+- **Sensible language** — English-speaking visitors get their own variant,
+  everyone else gets `en-IN`, which handles the names here best
+- Tap the mic while it's talking to interrupt it; audio on/off and your
+  preferred mode (voice or text) are remembered between visits
+
 ### Keeping it honest
 
 `npm run assistant:eval` runs 120 real visitor questions and asserts what each

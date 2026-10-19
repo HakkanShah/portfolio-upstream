@@ -5,7 +5,7 @@
  * Floating button with expandable chat panel
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { MessageCircle, X, Minimize2, Sparkles, MessageSquareText, Mic } from 'lucide-react';
@@ -29,11 +29,36 @@ const Assistant3DBot = dynamic(() => import('./assistant-3d-bot'), {
 
 type ChatMode = 'text' | 'voice';
 
+const CHAT_MODE_KEY = 'hakkan_assistant_chat_mode';
+
+const readChatMode = (): ChatMode => {
+    if (typeof window === 'undefined') return 'voice';
+    try {
+        return window.localStorage.getItem(CHAT_MODE_KEY) === 'text' ? 'text' : 'voice';
+    } catch {
+        return 'voice';
+    }
+};
+
 const AssistantInner: React.FC = () => {
-    const { isOpen, setIsOpen, state, voiceEnabled, addMessage, caption } = useAssistant();
+    const { isOpen, setIsOpen, state, voiceEnabled, messages, caption } = useAssistant();
     const [isMinimized, setIsMinimized] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [chatMode, setChatMode] = useState<ChatMode>('voice');
+    const [chatMode, setChatModeState] = useState<ChatMode>('voice');
+
+    // Remember how this visitor prefers to talk to the assistant.
+    useEffect(() => {
+        setChatModeState(readChatMode());
+    }, []);
+
+    const setChatMode = useCallback((mode: ChatMode) => {
+        setChatModeState(mode);
+        try {
+            window.localStorage.setItem(CHAT_MODE_KEY, mode);
+        } catch {
+            // Private mode — the preference just won't persist.
+        }
+    }, []);
     const dragControls = useDragControls();
     const constraintsRef = useRef(null);
 
@@ -97,64 +122,46 @@ const AssistantInner: React.FC = () => {
         );
     };
 
-    // Auto-Greeting Sequence
-    // Auto-Greeting Sequence
+    // Auto-greeting: after the visitor has been around a moment, the assistant
+    // introduces itself once per session and then gets out of the way — unless
+    // they've started talking to it, in which case it stays put.
     const [showWelcomeText, setShowWelcomeText] = useState(false);
 
+    const hasEngaged = messages.some((message) => message.role === 'user');
+    const engagedRef = useRef(hasEngaged);
     useEffect(() => {
-        const hasGreeted = sessionStorage.getItem('hakkan_assistant_welcome_shown');
-        if (hasGreeted) return;
+        engagedRef.current = hasEngaged;
+    }, [hasEngaged]);
 
-        let interactionTimer: NodeJS.Timeout;
+    useEffect(() => {
+        if (sessionStorage.getItem('hakkan_assistant_welcome_shown')) return;
+
+        let greetTimer: NodeJS.Timeout;
+        let dismissTimer: NodeJS.Timeout;
 
         const handleInteraction = () => {
-            // Remove listeners immediately to prevent multiple triggers
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('keydown', handleInteraction);
             window.removeEventListener('touchstart', handleInteraction);
 
-            // Wait 7 seconds before triggering the assistant
-            interactionTimer = setTimeout(() => {
+            greetTimer = setTimeout(() => {
                 if (sessionStorage.getItem('hakkan_assistant_welcome_shown')) return;
                 sessionStorage.setItem('hakkan_assistant_welcome_shown', 'true');
 
+                // Opening the panel is enough: the provider posts the welcome
+                // message and reads it out, so there's exactly one greeting.
                 setIsOpen(true);
                 setShowWelcomeText(true);
 
-                setTimeout(() => {
-                    const messageText = "Hello! Welcome to Hakkan's portfolio. You can find his latest projects, technical skills, and professional experience here. I'm his AI assistant, ready to help. Just ping me for anything you want to ask further!";
-
-                    addMessage({
-                        role: 'assistant',
-                        content: messageText,
-                    });
-
-                    if (voiceEnabled) {
-                        const startTime = Date.now();
-                        speak(
-                            messageText,
-                            () => {
-                                setShowWelcomeText(false);
-                                const elapsed = Date.now() - startTime;
-                                const waitTime = elapsed < 1000 ? 8000 : 1000;
-
-                                setTimeout(() => {
-                                    setIsOpen(false);
-                                    setOverrideState(null);
-                                }, waitTime);
-                            },
-                            () => {
-                                setOverrideState('speaking');
-                            }
-                        );
-                    } else {
-                        setTimeout(() => {
-                            setShowWelcomeText(false);
-                            setIsOpen(false);
-                        }, 8000);
+                dismissTimer = setTimeout(() => {
+                    setShowWelcomeText(false);
+                    // Never close the panel out from under someone using it.
+                    if (!engagedRef.current) {
+                        setIsOpen(false);
+                        setOverrideState(null);
                     }
-                }, 500);
-            }, 7000); // 7 second delay
+                }, 14000);
+            }, 7000);
         };
 
         window.addEventListener('click', handleInteraction);
@@ -165,9 +172,10 @@ const AssistantInner: React.FC = () => {
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('keydown', handleInteraction);
             window.removeEventListener('touchstart', handleInteraction);
-            if (interactionTimer) clearTimeout(interactionTimer);
+            if (greetTimer) clearTimeout(greetTimer);
+            if (dismissTimer) clearTimeout(dismissTimer);
         };
-    }, [voiceEnabled, setIsOpen, speak, addMessage]);
+    }, [setIsOpen]);
 
     // Check for mobile
     useEffect(() => {
@@ -273,6 +281,8 @@ const AssistantInner: React.FC = () => {
                         )}
                         <motion.div
                             key="assistant-panel"
+                            role="dialog"
+                            aria-label="Hakkan's portfolio assistant"
                             drag={!isMobile}
                             dragListener={false}
                             dragControls={dragControls}
@@ -343,7 +353,7 @@ const AssistantInner: React.FC = () => {
                                             onClick={() => setIsMinimized(!isMinimized)}
                                             className="h-8 w-8"
                                             title={isMinimized ? 'Expand' : 'Minimize'}
-                                            disabled={state === 'speaking' || state === 'thinking'}
+                                            aria-label={isMinimized ? 'Expand assistant' : 'Minimize assistant'}
                                         >
                                             <Minimize2 className="w-4 h-4" />
                                         </Button>
@@ -353,8 +363,8 @@ const AssistantInner: React.FC = () => {
                                         size="icon"
                                         onClick={() => setIsOpen(false)}
                                         className="h-8 w-8"
-                                        title="Close"
-                                        disabled={state === 'speaking' || state === 'thinking'}
+                                        title="Close (Esc)"
+                                        aria-label="Close assistant"
                                     >
                                         <X className="w-4 h-4" />
                                     </Button>
@@ -363,38 +373,30 @@ const AssistantInner: React.FC = () => {
 
                             {/* Mode Tabs */}
                             {!isMinimized && (
-                                <div className="flex border-b border-border bg-muted/10">
+                                <div className="flex border-b border-border bg-muted/10" role="tablist" aria-label="Assistant mode">
                                     <button
-                                        onClick={() => {
-                                            if (state !== 'speaking' && state !== 'thinking') {
-                                                setChatMode('voice');
-                                            }
-                                        }}
-                                        disabled={state === 'speaking' || state === 'thinking'}
+                                        onClick={() => setChatMode('voice')}
+                                        role="tab"
+                                        aria-selected={chatMode === 'voice'}
                                         className={cn(
                                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all',
                                             chatMode === 'voice'
                                                 ? 'text-primary border-b-2 border-primary bg-primary/5'
-                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30',
-                                            (state === 'speaking' || state === 'thinking') && 'opacity-50 cursor-not-allowed'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
                                         )}
                                     >
                                         <Mic className="w-4 h-4" />
                                         <span>Voice</span>
                                     </button>
                                     <button
-                                        onClick={() => {
-                                            if (state !== 'speaking' && state !== 'thinking') {
-                                                setChatMode('text');
-                                            }
-                                        }}
-                                        disabled={state === 'speaking' || state === 'thinking'}
+                                        onClick={() => setChatMode('text')}
+                                        role="tab"
+                                        aria-selected={chatMode === 'text'}
                                         className={cn(
                                             'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all',
                                             chatMode === 'text'
                                                 ? 'text-primary border-b-2 border-primary bg-primary/5'
-                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30',
-                                            (state === 'speaking' || state === 'thinking') && 'opacity-50 cursor-not-allowed'
+                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
                                         )}
                                     >
                                         <MessageSquareText className="w-4 h-4" />
