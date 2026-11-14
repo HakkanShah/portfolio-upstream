@@ -87,7 +87,7 @@ export const PROJECTS: Project[] = [
     longDescription: 'Ek Aur puts a floating counter over Instagram and YouTube while you are in Reels or Shorts, and both feed the same number. There are no lectures and no streaks to protect: it hands you the count, drops a dry roast at every milestone, and when you hit the limit you set a meme lands over the feed instead of a wellness sermon — tap "10 More" and it steps aside, then comes back with a new one. An accessibility service does the counting and Room keeps every raw event on the phone; only a username and a daily total — a date, a count, a duration — ever reach Supabase, which is all the shared leaderboard is built from. Android only and sideloaded, with a Next.js site for the download and the leaderboard.',
     why: 'Screen-time dashboards scold you after the fact, which is easy to ignore. I wanted the number in front of me while I was still scrolling, framed as encouragement rather than a telling-off — which turns out to be far more uncomfortable, and far more effective. It also forced the privacy question up front: the raw events have nowhere to go but the phone, and one setting takes you off the leaderboard entirely.',
     thumbnail: '/project-images/ek-aur.png',
-    tags: ['Kotlin', 'Jetpack Compose', 'Android', 'Accessibility Service', 'Room', 'Supabase', 'Next.js', 'Tailwind CSS'],
+    tags: ['Kotlin', 'Jetpack Compose', 'Android', 'Room', 'Supabase', 'Next.js'],
     liveUrl: 'https://ek-aur.vercel.app',
     repoUrl: 'https://github.com/HakkanShah/Ek-Aur',
     aiHint: 'reels counter android app',

@@ -51,9 +51,9 @@ const ProjectsSection = () => {
             </p>
           </AnimatedDiv>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 items-stretch">
             {displayedProjects.map((project, index) => (
-              <AnimatedDiv key={project.title} delay={index * 100} variant="slide">
+              <AnimatedDiv key={project.title} delay={index * 100} variant="slide" className="h-full">
                 <Card3D className="h-full" intensity={10}>
                   <motion.div
                     className="h-full flex flex-col overflow-hidden bg-background border-4 border-foreground rounded-lg shadow-lg group"
@@ -72,8 +72,9 @@ const ProjectsSection = () => {
                         className="object-cover border-b-4 border-foreground transition-transform duration-500 group-hover:scale-110"
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       />
-                      {/* Gradient overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                      {/* Gradient overlay — kept to the bottom strip so a light
+                          screenshot still reads as light, while the title stays legible */}
+                      <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
 
                       {/* Shine effect on hover */}
                       <motion.div
@@ -127,49 +128,45 @@ const ProjectsSection = () => {
                         )}
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex flex-col gap-2 mt-auto">
-                        {/* Top row: Details and Demo side by side */}
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="font-bold border-2 border-foreground text-xs sm:text-sm flex-1 h-9 sm:h-10"
-                            onClick={() => setSelectedProject(project)}
-                          >
-                            <Eye className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            Details
-                          </Button>
-                          <Link
-                            href={project.liveUrl || '#'}
-                            target="_blank"
-                            className="flex-1"
-                          >
-                            <Button
-                              size="sm"
-                              className="font-bold border-2 border-foreground text-xs sm:text-sm w-full h-9 sm:h-10"
-                              disabled={!project.liveUrl || project.liveUrl === '#'}
-                            >
-                              <ExternalLink className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              <span className="hidden sm:inline">Live Demo</span>
-                              <span className="sm:hidden">Demo</span>
-                            </Button>
-                          </Link>
-                        </div>
+                      {/* Action Buttons — one row, so a project with a public
+                          repo doesn't end up a whole button taller than one
+                          whose source is private */}
+                      <div className="flex gap-2 mt-auto">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="font-bold border-2 border-foreground text-xs sm:text-sm flex-1 h-9 sm:h-10 px-2"
+                          onClick={() => setSelectedProject(project)}
+                        >
+                          <Eye className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          Details
+                        </Button>
 
-                        {/* Bottom row: View Code full width (if available) */}
-                        {project.repoUrl && project.repoUrl !== '#' && (
-                          <Link
-                            href={project.repoUrl}
-                            target="_blank"
+                        <Link
+                          href={project.liveUrl || '#'}
+                          target="_blank"
+                          className="flex-1"
+                        >
+                          <Button
+                            size="sm"
+                            className="font-bold border-2 border-foreground text-xs sm:text-sm w-full h-9 sm:h-10 px-2"
+                            disabled={!project.liveUrl || project.liveUrl === '#'}
                           >
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                            <span className="hidden sm:inline">Live Demo</span>
+                            <span className="sm:hidden">Demo</span>
+                          </Button>
+                        </Link>
+
+                        {project.repoUrl && project.repoUrl !== '#' && (
+                          <Link href={project.repoUrl} target="_blank" aria-label="View source code">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="w-full text-xs sm:text-sm border-2 border-foreground/50 hover:border-foreground h-9 sm:h-10 font-bold"
+                              title="View source code"
+                              className="border-2 border-foreground/50 hover:border-foreground h-9 sm:h-10 w-9 sm:w-10 p-0 shrink-0"
                             >
-                              <Github className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              View Code
+                              <Github className="h-4 w-4" />
                             </Button>
                           </Link>
                         )}
