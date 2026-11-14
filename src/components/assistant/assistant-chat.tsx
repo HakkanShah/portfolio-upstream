@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, Briefcase, Code2, GraduationCap, Square } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, Briefcase, Code2, GraduationCap, Square, ExternalLink, CornerDownRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAssistant, speak } from '@/lib/assistant';
@@ -34,7 +34,21 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
         setVoiceEnabled,
         stopSpeaking,
         isLoading,
+        suggestions: followUps,
+        runAction,
+        handsFree,
+        setHandsFree,
+        setVoiceModeActive,
+        replayLast,
+        canReplay,
     } = useAssistant();
+
+    // Tell the provider when voice mode is the one on screen, so hands-free
+    // turn-taking only ever applies here.
+    useEffect(() => {
+        setVoiceModeActive(mode === 'voice');
+        return () => setVoiceModeActive(false);
+    }, [mode, setVoiceModeActive]);
 
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -83,6 +97,36 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
 
     const isThinking = state === 'thinking';
 
+    // The newest answer's buttons and follow-ups, shown in both modes.
+    const lastAssistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
+    const pendingActions = !isThinking ? lastAssistantMessage?.actions ?? [] : [];
+    const showFollowUps = !isThinking && !isListening && Boolean(lastAssistantMessage) && followUps.length > 0;
+
+    const actionButtons = pendingActions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+            {pendingActions.map((action, index) => (
+                <button
+                    key={`${action.type}-${index}`}
+                    type="button"
+                    onClick={() => runAction(action)}
+                    className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
+                        'bg-primary/15 border border-primary/40 text-foreground',
+                        'transition-colors hover:bg-primary/25 hover:border-primary/60 active:scale-95'
+                    )}
+                >
+                    {action.type === 'navigate' ? (
+                        <CornerDownRight className="h-3.5 w-3.5 text-primary" />
+                    ) : (
+                        <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                    )}
+                    {action.type === 'navigate' ? `Go to ${action.target}` : action.label}
+                </button>
+            ))}
+        </div>
+    );
+
     // Starter chips shown on the empty state
     const suggestions = [
         { icon: Sparkles, label: 'Who is Hakkan?', query: 'Who is Hakkan?' },
@@ -98,6 +142,28 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
             {/* Voice Mode UI - Compact controls at bottom, 3D bot is main focus in parent */}
             {mode === 'voice' ? (
                 <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-border bg-background/50 backdrop-blur-sm">
+                    {/* The last exchange, so a misheard question is visible */}
+                    {(lastUserMessage || lastAssistantMessage) && (
+                        <div className="mb-3 space-y-1 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+                            {lastUserMessage && (
+                                <p className="text-[11px] leading-snug text-muted-foreground">
+                                    <span className="font-semibold text-primary/80">You: </span>
+                                    {lastUserMessage.content.length > 90
+                                        ? `${lastUserMessage.content.slice(0, 90)}…`
+                                        : lastUserMessage.content}
+                                </p>
+                            )}
+                            {lastAssistantMessage && (
+                                <p className="text-xs leading-snug text-foreground/90 line-clamp-3">
+                                    {lastAssistantMessage.content.replace(/[*_`#]/g, '').slice(0, 200)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* What the assistant just offered to do */}
+                    {actionButtons && <div className="mb-3 flex justify-center">{actionButtons}</div>}
+
                     {/* Control bar */}
                     <div className="flex items-center justify-center gap-4">
                         {/* Status */}
@@ -170,6 +236,40 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                         </div>
                     </div>
 
+                    {/* Hands-free turn-taking, and hearing the answer again */}
+                    <div className="mt-3 flex items-center justify-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setHandsFree(!handsFree)}
+                            aria-pressed={handsFree}
+                            title="Keep the mic open between turns"
+                            className={cn(
+                                'rounded-full border px-3 py-1 text-[11px] font-medium transition-colors',
+                                handsFree
+                                    ? 'border-primary/50 bg-primary/15 text-foreground'
+                                    : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            {handsFree ? '🎙️ Hands-free on' : 'Hands-free off'}
+                        </button>
+
+                        {canReplay && (
+                            <button
+                                type="button"
+                                onClick={replayLast}
+                                disabled={isListening}
+                                title="Say that again"
+                                className={cn(
+                                    'rounded-full border border-border bg-muted/30 px-3 py-1 text-[11px] font-medium',
+                                    'text-muted-foreground transition-colors hover:text-foreground',
+                                    'disabled:opacity-40 disabled:pointer-events-none'
+                                )}
+                            >
+                                ↻ Repeat
+                            </button>
+                        )}
+                    </div>
+
                     {/* Hint */}
                     <p className="text-xs text-muted-foreground text-center mt-3 min-h-[16px]">
                         {!voiceSupported
@@ -183,7 +283,9 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                         : !voiceEnabled
                                             // Otherwise a muted bot just looks broken.
                                             ? 'Answers are muted — tap Voice Off to hear them.'
-                                            : 'Tap the mic and ask about his projects, stack or experience.'}
+                                            : handsFree
+                                                ? 'Tap the mic once — I keep listening between answers.'
+                                                : 'Tap the mic and ask about his projects, stack or experience.'}
                     </p>
                 </div>
             ) : (
@@ -257,6 +359,36 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                     />
                                 ))}
                             </AnimatePresence>
+                        )}
+
+                        {/* What the assistant can do next, and what to ask next */}
+                        {(actionButtons || showFollowUps) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="space-y-2 px-3 pt-2 pb-1"
+                            >
+                                {actionButtons}
+                                {showFollowUps && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {followUps.map((followUp) => (
+                                            <button
+                                                key={followUp}
+                                                type="button"
+                                                onClick={() => sendMessage(followUp)}
+                                                disabled={isLoading}
+                                                className={cn(
+                                                    'rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium',
+                                                    'transition-colors hover:bg-muted hover:border-primary/30',
+                                                    'disabled:opacity-50 disabled:pointer-events-none active:scale-95'
+                                                )}
+                                            >
+                                                {followUp}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </motion.div>
                         )}
 
                         {/* Thinking indicator */}

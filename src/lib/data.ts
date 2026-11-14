@@ -82,6 +82,17 @@ export const PROJECTS: Project[] = [
     aiHint: 'adaptive learning platform',
   },
   {
+    title: 'Ek Aur',
+    description: 'An Android app that counts the Reels and Shorts you scroll — and cheers you on for one more, while the number quietly turns you in.',
+    longDescription: 'Ek Aur puts a floating counter over Instagram and YouTube while you are in Reels or Shorts, and both feed the same number. There are no lectures and no streaks to protect: it hands you the count, drops a dry roast at every milestone, and when you hit the limit you set a meme lands over the feed instead of a wellness sermon — tap "10 More" and it steps aside, then comes back with a new one. An accessibility service does the counting and Room keeps every raw event on the phone; only a username and a daily total — a date, a count, a duration — ever reach Supabase, which is all the shared leaderboard is built from. Android only and sideloaded, with a Next.js site for the download and the leaderboard.',
+    why: 'Screen-time dashboards scold you after the fact, which is easy to ignore. I wanted the number in front of me while I was still scrolling, framed as encouragement rather than a telling-off — which turns out to be far more uncomfortable, and far more effective. It also forced the privacy question up front: the raw events have nowhere to go but the phone, and one setting takes you off the leaderboard entirely.',
+    thumbnail: '/project-images/ek-aur.png',
+    tags: ['Kotlin', 'Jetpack Compose', 'Android', 'Room', 'Supabase', 'Next.js'],
+    liveUrl: 'https://ek-aur.vercel.app',
+    repoUrl: 'https://github.com/HakkanShah/Ek-Aur',
+    aiHint: 'reels counter android app',
+  },
+  {
     title: 'AURA',
     description: 'A chat- and voice-driven desktop agent that operates your computer like a human — no code, no setup.',
     longDescription: 'AURA is the UI for OpenClaw: speak or type your intent and it drives your actual desktop to the outcome — booking a flight, applying to a job, summarising an inbox. Rather than wrapping rigid REST APIs, it pilots the real interface layer with full DOM reasoning across nested frames, backed by always-listening streaming speech-to-text, encrypted identity and form memory, a verify-before-act protocol, and fully local isolated execution so nothing runs on a remote container. Currently in v0.2 open beta, built in the open at Persist.',
@@ -202,28 +213,6 @@ export const PROJECTS: Project[] = [
     liveUrl: 'https://hakkanshah.github.io/ReelXtract/',
     repoUrl: 'https://github.com/HakkanShah/ReelXtract',
     aiHint: 'reels downloader',
-  },
-  {
-    title: 'Math-O-Matic',
-    description: 'A Multipurpose Calculator',
-    longDescription: 'A scientific calculator with Unit Convertor',
-    why: 'testing javascipt logic ',
-    thumbnail: '/project-images/calculator.png',
-    tags: ['html', 'css', 'javascript'],
-    liveUrl: 'https://hakkanshah.github.io/Math-o-Matic/',
-    repoUrl: 'https://github.com/HakkanShah/Math-o-Matic',
-    aiHint: 'calculator',
-  },
-  {
-    title: 'Hit-The-Jhatu',
-    description: 'whack-a-mole style browser game',
-    longDescription: 'A fun and addictive whack-a-mole style browser game featuring my friends as Jhatu and Gandu characters, inspired by trending Indian dank memes! Hit the Jhatu to score points while avoiding the Gandu. Test your reflexes and challenge your friends to beat your high score in this desi-themed game.',
-    why: 'it is a prank and experimental game to check my logical reasoning skills',
-    thumbnail: '/project-images/jhatugame.png',
-    tags: ['Node.js', 'HTML', 'CSS', 'JavaScript'],
-    liveUrl: 'https://hakkanshah.github.io/Hit-The-Jhatu/',
-    repoUrl: 'https://github.com/HakkanShah/Hit-The-Jhatu',
-    aiHint: 'hit the jhatu',
   },
 ];
 
@@ -518,7 +507,7 @@ export const GITHUB_STATS: {
   achievements: GitHubAchievement[];
 } = {
   username: 'HakkanShah',
-  publicRepos: 35,
+  publicRepos: 38,
   totalPRs: 57,
   longestStreak: { days: 77, period: 'Mar 5 – May 20, 2025' },
   topLanguage: 'TypeScript',
@@ -531,10 +520,10 @@ export const GITHUB_STATS: {
     { name: 'Python', percentage: 0.21 },
   ],
   achievements: [
-    { name: 'Pull Shark', badge: 'x2', img: 'https://github.githubassets.com/assets/pull-shark-default-498c279a747d.png' },
-    { name: 'YOLO', img: 'https://github.githubassets.com/assets/yolo-default-be0bbff04951.png' },
+    { name: 'Pull Shark', badge: 'x3', img: 'https://github.githubassets.com/assets/pull-shark-default-498c279a747d.png' },
+    { name: 'Pair Extraordinaire', badge: 'x3', img: 'https://user-images.githubusercontent.com/101352977/178841186-98adb2c7-3c39-4e69-8251-09891cbe1983.png' },
     { name: 'Quickdraw', img: 'https://github.githubassets.com/assets/quickdraw-default-39c6aec8ff89.png' },
-    { name: 'Pair Extraordinaire', img: 'https://user-images.githubusercontent.com/101352977/178841186-98adb2c7-3c39-4e69-8251-09891cbe1983.png' },
+    { name: 'YOLO', img: 'https://github.githubassets.com/assets/yolo-default-be0bbff04951.png' },
   ],
 };
 

@@ -9,12 +9,16 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { getWelcomeMessage, MAX_HISTORY_TURNS, type AssistantResponse, type Turn } from './types';
 import { askAssistant, AssistantApiError, type ChatErrorCode } from './chat-client';
+import { askLocal, createMemory, mergeModelAnswer, degradeToLocal, type AssistantReply, type BrainMemory } from './engine';
+import { executeAction, type AssistantAction } from './actions';
+import { warmIndex } from './brain/brain';
 import {
     startListening,
     stopListening,
     speak,
     cancelSpeaking,
     isVoiceSupported,
+    isCurrentlySpeaking,
     isSpeechRecognitionSupported,
     preloadVoices,
     primeSpeechSynthesis,
@@ -36,6 +40,8 @@ export interface Message {
         type: 'navigate';
         target: string;
     };
+    /** Things the assistant can do on the page for this answer. */
+    actions?: AssistantAction[];
 }
 
 export interface Caption {
@@ -52,6 +58,19 @@ interface AssistantContextType {
     isLoading: boolean;
     /** True while an answer is being read aloud. */
     isSpeaking: boolean;
+    /** Context-aware follow-ups for the latest answer. */
+    suggestions: string[];
+    /** Run one of an answer's actions, e.g. from a tapped button. */
+    runAction: (action: AssistantAction) => void;
+    /** Keep the mic open between turns so a voice conversation flows. */
+    handsFree: boolean;
+    setHandsFree: (enabled: boolean) => void;
+    /** Voice mode tells the provider it is on screen, so hands-free applies. */
+    setVoiceModeActive: (active: boolean) => void;
+    /** Say the last answer again. */
+    replayLast: () => void;
+    /** True when the last answer can be replayed. */
+    canReplay: boolean;
     sendMessage: (text: string) => void;
     startVoiceInput: () => void;
     startVoiceToText: (onTranscript: (text: string) => void) => void;
@@ -66,15 +85,19 @@ interface AssistantContextType {
 }
 
 const VOICE_PREFERENCE_KEY = 'hakkan_assistant_voice_enabled';
+const HANDS_FREE_KEY = 'hakkan_assistant_hands_free';
 
-const readVoicePreference = (): boolean => {
-    if (typeof window === 'undefined') return true;
+const readStoredFlag = (key: string, fallback: boolean): boolean => {
+    if (typeof window === 'undefined') return fallback;
     try {
-        return window.localStorage.getItem(VOICE_PREFERENCE_KEY) !== 'false';
+        const stored = window.localStorage.getItem(key);
+        return stored === null ? fallback : stored !== 'false';
     } catch {
-        return true;
+        return fallback;
     }
 };
+
+const readVoicePreference = (): boolean => readStoredFlag(VOICE_PREFERENCE_KEY, true);
 
 /**
  * What each failure sounds like. The chat bubble can afford emoji, markdown
@@ -113,11 +136,57 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const [voiceSupported, setVoiceSupported] = useState(false);
     const [hasShownWelcome, setHasShownWelcome] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [suggestions, setSuggestions] = useState<string[]>([
+        'Show his projects',
+        'What does he build?',
+        'Is he open to work?',
+    ]);
 
     // Conversation memory. The model gets the actual turns, so follow-ups like
     // "yes", "tell me more" and "the second one" resolve natively — no need for
     // the old suggested-topic bookkeeping.
     const historyRef = useRef<Turn[]>([]);
+
+    const [handsFree, setHandsFreeState] = useState(true);
+    const [canReplay, setCanReplay] = useState(false);
+
+    /** Shown once if the browser never actually plays our speech. */
+    const speechNoticeShownRef = useRef(false);
+
+    // Read inside speech callbacks, which capture their creation-time values.
+    const handsFreeRef = useRef(handsFree);
+    const voiceModeActiveRef = useRef(false);
+    const isOpenRef = useRef(false);
+    /** Set when the visitor stops playback themselves — don't reopen the mic. */
+    const suppressAutoListenRef = useRef(false);
+    /** The last thing said out loud, so it can be replayed. */
+    const lastSpokenRef = useRef<string>('');
+    /** startVoiceInput is defined below; speech callbacks reach it from here. */
+    const startVoiceInputRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        handsFreeRef.current = handsFree;
+    }, [handsFree]);
+
+    useEffect(() => {
+        isOpenRef.current = isOpen;
+    }, [isOpen]);
+
+    const setHandsFree = useCallback((enabled: boolean) => {
+        setHandsFreeState(enabled);
+        try {
+            window.localStorage.setItem(HANDS_FREE_KEY, String(enabled));
+        } catch {
+            // Private mode — the preference just won't persist.
+        }
+    }, []);
+
+    const setVoiceModeActive = useCallback((active: boolean) => {
+        voiceModeActiveRef.current = active;
+    }, []);
+
+    /** The brain's own memory: "tell me more", "open it", "its stack". */
+    const memoryRef = useRef<BrainMemory>(createMemory());
 
     // Guards against a superseded request landing after a newer one.
     const requestIdRef = useRef(0);
@@ -125,10 +194,18 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const interimTranscriptRef = useRef<string>('');
 
+    // Build the retrieval index before the first question, not during it.
+    useEffect(() => {
+        if (!isOpen) return;
+        const idle = window.requestIdleCallback?.bind(window) ?? ((cb: () => void) => setTimeout(cb, 1));
+        idle(() => warmIndex());
+    }, [isOpen]);
+
     // Check voice support and restore the visitor's audio preference
     useEffect(() => {
         setVoiceSupported(isVoiceSupported());
         setVoiceEnabledState(readVoicePreference());
+        setHandsFreeState(readStoredFlag(HANDS_FREE_KEY, true));
         preloadVoices();
     }, []);
 
@@ -143,6 +220,8 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, []);
 
     const stopSpeaking = useCallback(() => {
+        // The visitor chose silence; don't answer that by opening the mic.
+        suppressAutoListenRef.current = true;
         cancelSpeaking();
         setCaption(null);
         setState((current) => (current === 'speaking' ? 'idle' : current));
@@ -162,6 +241,24 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         stopListening();
     }, []);
 
+    /**
+     * A backgrounded tab is the classic way to strand speech synthesis: the
+     * audio stops but `onend` never fires, so the bot sits in its speaking
+     * animation forever. Leaving also shouldn't leave a live microphone.
+     */
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (!document.hidden) return;
+            cancelSpeaking();
+            stopListening();
+            setCaption(null);
+            setState((current) => (current === 'speaking' || current === 'listening' ? 'idle' : current));
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, []);
+
     // Helper to generate unique ID
     const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -178,7 +275,42 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return message;
     }, []);
 
-    const addAssistantMessage = useCallback((response: AssistantResponse) => {
+    // Add system/error message (for voice errors, etc.)
+    const addSystemMessage = useCallback((content: string, messageType: 'error' | 'info' = 'info') => {
+        const message: Message = {
+            id: generateId(),
+            role: 'system',
+            content,
+            timestamp: Date.now(),
+            messageType,
+        };
+        setMessages((prev) => [...prev, message]);
+        return message;
+    }, []);
+
+    /**
+     * Run what the answer promised. Scrolling always works; a pop-up opened
+     * outside a user gesture usually does not, so a blocked link is left as a
+     * button on the message for the visitor to tap.
+     */
+    const runActions = useCallback((actions: AssistantAction[] | undefined) => {
+        if (!actions?.length) return;
+
+        // Let the answer land before the page moves under the visitor.
+        setTimeout(() => {
+            for (const action of actions) {
+                const outcome = executeAction(action);
+                // Only the first link is attempted: two pop-ups is an ambush.
+                if (action.type !== 'navigate' && (outcome.done || outcome.blocked)) break;
+            }
+        }, 450);
+    }, []);
+
+    const runAction = useCallback((action: AssistantAction) => {
+        executeAction(action);
+    }, []);
+
+    const addAssistantMessage = useCallback((response: AssistantResponse & { actions?: AssistantAction[] }) => {
         const message: Message = {
             id: generateId(),
             role: 'assistant',
@@ -186,24 +318,14 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             timestamp: Date.now(),
             messageType: 'normal',
             action: response.action,
+            actions: response.actions,
         };
         setMessages((prev) => [...prev, message]);
 
-        // Handle navigation action
         if (response.action?.type === 'navigate') {
-            setTimeout(() => {
-                const element = document.getElementById(response.action!.target);
-                if (element) {
-                    const headerOffset = 100;
-                    const elementPosition = element.getBoundingClientRect().top;
-                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-                    window.scrollTo({
-                        top: offsetPosition,
-                        behavior: 'smooth',
-                    });
-                }
-            }, 500);
+            runActions([{ type: 'navigate', target: response.action.target as never }]);
         }
+        runActions(response.actions);
 
         // Read the answer aloud. Captions are driven by the audio itself, one
         // spoken chunk at a time, so they can't drift out of sync.
@@ -225,6 +347,10 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 setCaption(null);
             }, estimatedMs);
 
+            let started = false;
+            lastSpokenRef.current = speakText;
+            setCanReplay(true);
+
             speak(
                 speakText,
                 () => {
@@ -233,8 +359,49 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                     // missing voices), and the UI must not stay stuck.
                     setState((current) => (current === 'speaking' || current === 'thinking' ? 'idle' : current));
                     setCaption(null);
+
+                    // Voice-first means never leaving the visitor wondering
+                    // why the bot is mute: say it in writing, once.
+                    if (!started && !speechNoticeShownRef.current) {
+                        speechNoticeShownRef.current = true;
+                        addSystemMessage(
+                            "I can't play audio in this browser right now. 🔈\n\n💡 *Check your volume or silent switch — my answers still show up here.*",
+                            'info'
+                        );
+                    }
+
+                    /**
+                     * Hands-free: a voice conversation shouldn't need a tap
+                     * between every turn. Only after the assistant actually
+                     * spoke, only while voice mode is on screen, and never
+                     * when the visitor stopped playback themselves.
+                     */
+                    const handBackToVisitor =
+                        started &&
+                        handsFreeRef.current &&
+                        voiceModeActiveRef.current &&
+                        isOpenRef.current &&
+                        !suppressAutoListenRef.current;
+
+                    suppressAutoListenRef.current = false;
+
+                    if (handBackToVisitor) {
+                        setTimeout(() => {
+                            if (
+                                handsFreeRef.current &&
+                                voiceModeActiveRef.current &&
+                                isOpenRef.current &&
+                                !isCurrentlySpeaking()
+                            ) {
+                                startVoiceInputRef.current?.();
+                            }
+                        }, 450);
+                    }
                 },
-                () => setState('speaking'),
+                () => {
+                    started = true;
+                    setState('speaking');
+                },
                 {
                     onCaption: (chunk) => setCaption({ text: chunk, source: 'assistant' }),
                 }
@@ -242,7 +409,28 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
 
         return message;
-    }, [voiceEnabled]);
+    }, [voiceEnabled, runActions, addSystemMessage]);
+
+    /** Say the last answer again, without re-asking the question. */
+    const replayLast = useCallback(() => {
+        const text = lastSpokenRef.current;
+        if (!text) return;
+
+        cancelSpeaking();
+        // A replay is a deliberate listen-again, not an invitation to talk.
+        suppressAutoListenRef.current = true;
+        setCaption({ text, source: 'assistant' });
+
+        speak(
+            text,
+            () => {
+                setState((current) => (current === 'speaking' ? 'idle' : current));
+                setCaption(null);
+            },
+            () => setState('speaking'),
+            { onCaption: (chunk) => setCaption({ text: chunk, source: 'assistant' }) }
+        );
+    }, []);
 
     // Expose generic addMessage
     const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
@@ -254,18 +442,6 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setMessages((prev) => [...prev, newMessage]);
     }, []);
 
-    // Add system/error message (for voice errors, etc.)
-    const addSystemMessage = useCallback((content: string, messageType: 'error' | 'info' = 'info') => {
-        const message: Message = {
-            id: generateId(),
-            role: 'system',
-            content,
-            timestamp: Date.now(),
-            messageType,
-        };
-        setMessages((prev) => [...prev, message]);
-        return message;
-    }, []);
 
     /**
      * Say a one-off line (an error, a notice) without putting it in the
@@ -320,66 +496,92 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, [isOpen, hasShownWelcome, addAssistantMessage]);
 
-    // Ask the model. The network round trip is the natural pause now, so there
-    // is no artificial "thinking" delay.
+    /**
+     * Answer the visitor.
+     *
+     * The on-device brain goes first and almost always wins — instantly, with
+     * no network call. Only a question it admits it cannot answer reaches the
+     * model, and if that call fails the brain's answer is still delivered, so
+     * a visitor never gets silence or a bare error where an answer exists.
+     */
     const processInput = useCallback(async (text: string) => {
         const trimmedText = text.trim();
         if (!trimmedText) return;
 
-        // Supersede anything still in flight — the user has moved on.
+        // Supersede anything still in flight — the visitor has moved on.
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
         const myRequestId = ++requestIdRef.current;
 
         addUserMessage(trimmedText);
+
+        let local: AssistantReply;
+        try {
+            const turn = askLocal(trimmedText, memoryRef.current);
+            memoryRef.current = turn.memory;
+            local = turn.reply;
+        } catch (error) {
+            console.error('On-device brain failed:', error);
+            announce(
+                'Something went wrong on my side. Mind asking that again?',
+                SPOKEN_GENERIC_ERROR
+            );
+            return;
+        }
+
+        const remember = (answerText: string) => {
+            historyRef.current = [
+                ...historyRef.current,
+                { role: 'user' as const, content: trimmedText },
+                { role: 'assistant' as const, content: answerText },
+            ].slice(-MAX_HISTORY_TURNS);
+        };
+
+        const deliver = (reply: AssistantReply) => {
+            setSuggestions(reply.chips);
+            remember(reply.text);
+            addAssistantMessage({
+                text: reply.text,
+                speakText: reply.speak,
+                actions: reply.actions,
+            });
+            if (!voiceEnabled || !reply.speak) setState('idle');
+        };
+
+        // The brain knows this one: answer now, no network at all.
+        if (!local.needsLLM) {
+            deliver(local);
+            return;
+        }
+
         setState('thinking');
         setIsLoading(true);
 
-        // Safety net for a request that neither resolves nor rejects.
-        const thinkingTimeout = setTimeout(() => {
-            setState((currentState) => {
-                if (currentState === 'thinking') {
-                    console.warn('Thinking timeout - resetting state');
-                    return 'idle';
-                }
-                return currentState;
-            });
-        }, 12000);
-
         try {
             const response = await askAssistant(trimmedText, historyRef.current, controller.signal);
-
-            // A newer question has since been asked; this answer is stale.
             if (myRequestId !== requestIdRef.current) return;
-
-            const nextHistory: Turn[] = [
-                ...historyRef.current,
-                { role: 'user', content: trimmedText },
-                { role: 'assistant', content: response.text },
-            ];
-            historyRef.current = nextHistory.slice(-MAX_HISTORY_TURNS);
-
-            addAssistantMessage(response);
-            if (!voiceEnabled) {
-                setState('idle');
-            }
+            deliver(mergeModelAnswer(response, local));
         } catch (error) {
             if (myRequestId !== requestIdRef.current) return;
-            // Superseded by a newer request, not a failure.
             if ((error as Error)?.name === 'AbortError') return;
 
-            console.error('Error processing query:', error);
-            setState('idle');
+            console.error('Model route unavailable, answering from the device:', error);
 
+            // The model was only ever the enhancement. Say what we do know,
+            // and say plainly that the rest is out of reach right now.
             const isApiError = error instanceof AssistantApiError;
-            announce(
-                isApiError ? error.message : 'Sorry, something went wrong. Please try again!',
-                isApiError ? SPOKEN_API_ERROR[error.code] ?? SPOKEN_GENERIC_ERROR : SPOKEN_GENERIC_ERROR,
-                isApiError && error.code === 'unconfigured' ? 'info' : 'error'
-            );
+            const note = isApiError && error.code === 'rate_limited'
+                ? "I'm being asked a lot right now, so here's what I know offline:"
+                : "I can't reach my cloud brain right now, so here's what I know offline:";
+
+            const fallback = degradeToLocal(local);
+            deliver({
+                ...fallback,
+                text: `*${note}*\n\n${fallback.text}`,
+                speak: `${note} ${fallback.speak}`,
+            });
         } finally {
-            clearTimeout(thinkingTimeout);
             if (myRequestId === requestIdRef.current) setIsLoading(false);
         }
     }, [addUserMessage, addAssistantMessage, announce, voiceEnabled]);
@@ -469,6 +671,10 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, [voiceSupported, voiceEnabled, processInput, handleVoiceError, announce]);
 
     // Start voice-to-text (fills input box instead of auto-sending)
+    useEffect(() => {
+        startVoiceInputRef.current = startVoiceInput;
+    }, [startVoiceInput]);
+
     const transcriptCallbackRef = useRef<((text: string) => void) | null>(null);
 
     const startVoiceToText = useCallback((onTranscript: (text: string) => void) => {
@@ -523,7 +729,11 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setMessages([]);
         setHasShownWelcome(false);
         setIsLoading(false);
-        historyRef.current = []; // Reset conversation memory
+        historyRef.current = [];
+        memoryRef.current = createMemory();
+        lastSpokenRef.current = '';
+        setCanReplay(false);
+        setSuggestions(['Show his projects', 'What does he build?', 'Is he open to work?']);
     }, []);
 
     const value: AssistantContextType = {
@@ -535,6 +745,13 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         voiceSupported,
         isLoading,
         isSpeaking: state === 'speaking',
+        suggestions,
+        runAction,
+        handsFree,
+        setHandsFree,
+        setVoiceModeActive,
+        replayLast,
+        canReplay,
         sendMessage,
         startVoiceInput,
         startVoiceToText,
