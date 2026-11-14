@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, Briefcase, Code2, GraduationCap, Square } from 'lucide-react';
+import { Send, Mic, MicOff, Volume2, VolumeX, Loader2, Sparkles, Briefcase, Code2, GraduationCap, Square, ExternalLink, CornerDownRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAssistant, speak } from '@/lib/assistant';
@@ -34,6 +34,8 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
         setVoiceEnabled,
         stopSpeaking,
         isLoading,
+        suggestions: followUps,
+        runAction,
     } = useAssistant();
 
     const [inputValue, setInputValue] = useState('');
@@ -83,6 +85,35 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
 
     const isThinking = state === 'thinking';
 
+    // The newest answer's buttons and follow-ups, shown in both modes.
+    const lastAssistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
+    const pendingActions = !isThinking ? lastAssistantMessage?.actions ?? [] : [];
+    const showFollowUps = !isThinking && !isListening && Boolean(lastAssistantMessage) && followUps.length > 0;
+
+    const actionButtons = pendingActions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+            {pendingActions.map((action, index) => (
+                <button
+                    key={`${action.type}-${index}`}
+                    type="button"
+                    onClick={() => runAction(action)}
+                    className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold',
+                        'bg-primary/15 border border-primary/40 text-foreground',
+                        'transition-colors hover:bg-primary/25 hover:border-primary/60 active:scale-95'
+                    )}
+                >
+                    {action.type === 'navigate' ? (
+                        <CornerDownRight className="h-3.5 w-3.5 text-primary" />
+                    ) : (
+                        <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                    )}
+                    {action.type === 'navigate' ? `Go to ${action.target}` : action.label}
+                </button>
+            ))}
+        </div>
+    );
+
     // Starter chips shown on the empty state
     const suggestions = [
         { icon: Sparkles, label: 'Who is Hakkan?', query: 'Who is Hakkan?' },
@@ -98,6 +129,9 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
             {/* Voice Mode UI - Compact controls at bottom, 3D bot is main focus in parent */}
             {mode === 'voice' ? (
                 <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-border bg-background/50 backdrop-blur-sm">
+                    {/* What the assistant just offered to do */}
+                    {actionButtons && <div className="mb-3 flex justify-center">{actionButtons}</div>}
+
                     {/* Control bar */}
                     <div className="flex items-center justify-center gap-4">
                         {/* Status */}
@@ -257,6 +291,36 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                     />
                                 ))}
                             </AnimatePresence>
+                        )}
+
+                        {/* What the assistant can do next, and what to ask next */}
+                        {(actionButtons || showFollowUps) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="space-y-2 px-3 pt-2 pb-1"
+                            >
+                                {actionButtons}
+                                {showFollowUps && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {followUps.map((followUp) => (
+                                            <button
+                                                key={followUp}
+                                                type="button"
+                                                onClick={() => sendMessage(followUp)}
+                                                disabled={isLoading}
+                                                className={cn(
+                                                    'rounded-full border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium',
+                                                    'transition-colors hover:bg-muted hover:border-primary/30',
+                                                    'disabled:opacity-50 disabled:pointer-events-none active:scale-95'
+                                                )}
+                                            >
+                                                {followUp}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </motion.div>
                         )}
 
                         {/* Thinking indicator */}
