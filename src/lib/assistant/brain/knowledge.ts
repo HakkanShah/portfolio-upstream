@@ -80,15 +80,29 @@ const GENERIC_TECH_WORDS = new Set([
     'setup', 'windows', 'speech', 'agent', 'system', 'engine',
 ]);
 
-const techKeys = (label: string): string[] => {
+/**
+ * Keys a technology can be looked up by.
+ *
+ * `identity` keys name this exact technology: "react.js", "reactjs", "react".
+ * `aliases` are a convenience — the first word of a longer name — and must
+ * never be treated as identity: "React Native" and "Firebase Studio" also
+ * start with "react" and "firebase", and merging on that made the assistant
+ * answer "does he know React?" with "Yes — React Native".
+ */
+const techKeys = (label: string): { identity: string[]; aliases: string[] } => {
     const base = normalize(label);
-    const keys = new Set<string>([base, base.replace(/[\s.-]/g, '')]);
+    const compact = base.replace(/[\s.-]/g, '');
+    const identity = new Set<string>([base, compact]);
 
+    // "React.js" is "React", "Node.js" is "Node".
+    if (/[a-z]{3,}js$/.test(compact)) identity.add(compact.replace(/js$/, ''));
+
+    const aliases = new Set<string>();
     const words = base.split(' ').filter(Boolean);
-    if (words.length > 1 && !GENERIC_TECH_WORDS.has(words[0]) && words[0].length > 2) {
-        keys.add(words[0]);
+    if (words.length > 1 && !GENERIC_TECH_WORDS.has(words[0]) && words[0].length > 2 && !identity.has(words[0])) {
+        aliases.add(words[0]);
     }
-    return Array.from(keys).filter(Boolean);
+    return { identity: Array.from(identity).filter(Boolean), aliases: Array.from(aliases) };
 };
 
 // ============ Technology index ============
@@ -106,11 +120,15 @@ let techIndexCache: Map<string, TechEntry> | null = null;
 
 const upsertTech = (
     index: Map<string, TechEntry>,
+    /** Keys currently held only as a first-word alias, which identity outranks. */
+    borrowed: Set<string>,
     label: string,
     patch: Partial<Omit<TechEntry, 'label' | 'keys'>>
 ): void => {
-    const keys = techKeys(label);
-    const existing = keys.map((key) => index.get(key)).find(Boolean);
+    const { identity, aliases } = techKeys(label);
+    const existing = identity
+        .map((key) => (borrowed.has(key) ? undefined : index.get(key)))
+        .find(Boolean);
 
     const entry: TechEntry = existing ?? {
         label,
@@ -124,9 +142,15 @@ const upsertTech = (
     if (patch.listedSkill) entry.label = label;
     entry.listedSkill = entry.listedSkill || Boolean(patch.listedSkill);
 
-    for (const key of keys) {
+    for (const key of identity) {
         if (!entry.keys.includes(key)) entry.keys.push(key);
         index.set(key, entry);
+        borrowed.delete(key);
+    }
+    for (const key of aliases) {
+        if (index.has(key)) continue;
+        index.set(key, entry);
+        borrowed.add(key);
     }
     for (const group of patch.groups ?? []) {
         if (!entry.groups.includes(group)) entry.groups.push(group);
@@ -143,20 +167,21 @@ export const getTechIndex = (): Map<string, TechEntry> => {
     if (techIndexCache) return techIndexCache;
 
     const index = new Map<string, TechEntry>();
+    const borrowed = new Set<string>();
 
     for (const group of SKILLS) {
         for (const skill of group.skills) {
-            upsertTech(index, skill.name, { groups: [group.name], listedSkill: true });
+            upsertTech(index, borrowed, skill.name, { groups: [group.name], listedSkill: true });
         }
     }
     for (const project of PROJECTS) {
         for (const tag of project.tags) {
-            upsertTech(index, tag, { projects: [project.title] });
+            upsertTech(index, borrowed, tag, { projects: [project.title] });
         }
     }
     for (const role of EXPERIENCE) {
         for (const tech of role.details.technologies) {
-            upsertTech(index, tech, { roles: [`${role.role} at ${role.company}`] });
+            upsertTech(index, borrowed, tech, { roles: [`${role.role} at ${role.company}`] });
         }
     }
 
@@ -239,8 +264,14 @@ export const getProjects = (): ProjectEntry[] => {
             normalizedTitle,
             normalizedTitle.replace(/\s+/g, ''),
             normalizedTitle.replace(/\s+/g, '-'),
-            // "MockHick" is also typed and said as "mock hick"
-            normalize(project.title.replace(/([a-z])([A-Z])/g, '$1 $2')),
+            // "MockHick" is typed as "mock hick", and "OHMSchool" as "ohm
+            // school" — the second needs an acronym-aware split, which the
+            // plain camelCase one misses entirely.
+            normalize(
+                project.title
+                    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+            ),
             normalize(project.aiHint),
         ]);
 
@@ -272,6 +303,24 @@ export const findProjectByText = (text: string): ProjectEntry | null => {
             if (alias.length < 4) continue;
             const pattern = new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
             if (pattern.test(normalized)) candidates.push({ project, length: alias.length });
+        }
+    }
+
+    // Nothing matched as a phrase: try again ignoring spacing entirely, so
+    // "ohm school", "ohmschool" and "ohm-school" all find the same project.
+    if (!candidates.length) {
+        const compactQuery = normalized.replace(/[\s-]/g, '');
+
+        for (const project of getProjects()) {
+            for (const alias of project.aliases) {
+                const compactAlias = alias.replace(/[\s-]/g, '');
+                // Short names would collide with ordinary words once spacing
+                // is thrown away, so only distinctive ones qualify.
+                if (compactAlias.length < 5) continue;
+                if (compactQuery.includes(compactAlias)) {
+                    candidates.push({ project, length: compactAlias.length });
+                }
+            }
         }
     }
 
@@ -513,6 +562,9 @@ const contactCards = (): KnowledgeCard[] => [
     },
 ];
 
+/** The sentence of his bio that says where he is, quoted rather than retyped. */
+const LOCATION_LINE = ABOUT_ME.split(/(?<=[.!?])\s+/).find((sentence) => /\bbased in\b/i.test(sentence)) ?? null;
+
 const aboutCards = (): KnowledgeCard[] => [
     {
         id: 'about:summary',
@@ -526,42 +578,218 @@ const aboutCards = (): KnowledgeCard[] => [
         chips: ['His projects', 'His tech stack', 'Is he open to work?'],
         weight: 1.25,
     },
+    {
+        id: 'about:location',
+        kind: 'about',
+        title: 'Where he is based',
+        aliases: ['location', 'where is he based', 'where does he live', 'where is he from', 'city', 'country', 'timezone'],
+        keywords: ['location', 'based', 'live', 'country', 'india', 'remote', 'timezone', 'ist', 'relocate'],
+        body: [
+            `📍 ${LOCATION_LINE ?? `He's based in ${OWNER.location}.`}`,
+            '',
+            `He works remotely as a ${OWNER.headline}, on Indian Standard Time.`,
+        ].join('\n'),
+        speak: `He's based in India and works remotely, as a ${OWNER.headline}.`,
+        section: 'about',
+        chips: ['Is he open to work?', 'His experience', 'Contact him'],
+        weight: 1.1,
+    },
 ];
 
-/**
- * The free prose, chunked by paragraph so a question can pull in just the part
- * that answers it. This is where availability, opinions and the answers to
- * "questions people actually ask" live.
- */
-const proseCards = (): KnowledgeCard[] => {
-    const paragraphs = PROFILE_PROSE.split(/\n\s*\n/)
-        .map((part) => part.trim())
-        .filter((part) => part.length > 60);
+/** Projects whose source is public — the open-source answer is this list. */
+const publicProjects = () => PROJECTS.filter((project) => project.repoUrl && project.repoUrl !== '#');
 
-    return paragraphs.map((paragraph, index) => {
-        // A markdown-ish heading or the first few words make a usable title.
-        const firstLine = paragraph.split('\n')[0].replace(/^#+\s*/, '').trim();
-        const title = firstLine.length <= 70 ? firstLine : `${firstLine.slice(0, 60)}…`;
+/** What he has to show for the work, in his own words from the experience list. */
+const proofCards = (): KnowledgeCard[] => {
+    const openSource = publicProjects();
+    const wins = CURRENT_ROLE.details.achievements;
+    const badges = GITHUB_STATS.achievements.map((badge) => badge.name);
+    const flagship = PROJECTS.slice(0, 2);
 
-        return {
-            id: `prose:${index}`,
-            kind: 'faq' as const,
-            title,
-            aliases: [],
-            keywords: [],
-            body: paragraph,
-            section: 'about',
-            chips: ['His projects', 'Is he open to work?', 'Contact him'],
-            weight: 0.95,
-        };
-    });
+    return [
+        {
+            id: 'faq:open-source',
+            kind: 'faq',
+            title: 'Open source work',
+            aliases: ['open source', 'opensource', 'public repos', 'source code', 'public code'],
+            keywords: ['open', 'source', 'repository', 'repo', 'public', 'github', 'contribute', 'code'],
+            body: [
+                `🧑‍💻 **${openSource.length} of his ${PROJECTS.length} projects are open source**, out of ${GITHUB_STATS.publicRepos} public repositories on GitHub:`,
+                ...openSource.slice(0, 6).map((project) => `• [${project.title}](${project.repoUrl}) — ${project.description}`),
+                ...(openSource.length > 6 ? [`• …and ${openSource.length - 6} more on his GitHub.`] : []),
+            ].join('\n'),
+            speak: `${openSource.length} of his ${PROJECTS.length} projects are open source, including ${openSource.slice(0, 3).map((project) => project.title).join(', ')}. He has ${GITHUB_STATS.publicRepos} public repositories on GitHub.`,
+            section: 'github',
+            actions: [{ type: 'open_url', url: OWNER.github, label: 'Open his GitHub' }],
+            chips: ['GitHub stats', `Tell me about ${openSource[0]?.title ?? 'his projects'}`, 'His skills'],
+            weight: 1.1,
+        },
+        {
+            id: 'faq:achievements',
+            kind: 'faq',
+            title: 'Achievements',
+            aliases: ['achievements', 'accomplishments', 'awards', 'wins', 'highlights', 'what has he achieved'],
+            keywords: ['achievement', 'accomplishment', 'award', 'win', 'won', 'highlight', 'proud', 'startupathon', 'badge'],
+            body: [
+                `🏆 **What he has to show for it**`,
+                ...wins.map((win) => `• ${win}`),
+                ...(badges.length ? ['', `On GitHub he has earned ${badges.join(', ')}.`] : []),
+            ].join('\n'),
+            speak: `${wins.slice(0, 2).join('. ')}.`,
+            section: 'experience',
+            actions: [{ type: 'navigate', target: 'experience', label: 'See his experience' }],
+            chips: ['His experience', 'His best project', 'Is he open to work?'],
+            weight: 1.1,
+        },
+        {
+            id: 'faq:why-him',
+            kind: 'faq',
+            title: 'Why work with him',
+            aliases: ['why hire him', 'should i hire him', 'is he good', 'what makes him different', 'his strengths', 'why him'],
+            keywords: ['hire', 'strength', 'good', 'different', 'unique', 'stand', 'special', 'worth', 'talented', 'skilled'],
+            // Only what the portfolio can back up — the verdict stays the visitor's.
+            body: [
+                `I'm his assistant, so judge the evidence rather than my opinion:`,
+                ...wins.slice(0, 3).map((win) => `• ${win}`),
+                `• He builds the whole product — model, backend and interface — as a ${OWNER.headline}`,
+                '',
+                `Start with ${flagship.map((project) => `**${project.title}**`).join(' and ')}, then ask him anything directly: **${OWNER.email}**`,
+            ].join('\n'),
+            speak: `I'm his assistant, so judge the evidence. ${wins[0]}. He builds the whole product, from the model to the interface. Have a look at ${flagship.map((project) => project.title).join(' and ')}.`,
+            section: 'projects',
+            actions: [{ type: 'navigate', target: 'projects', label: 'See his projects' }],
+            chips: [`Tell me about ${flagship[0].title}`, 'Is he open to work?', 'Download his CV'],
+            weight: 1.05,
+        },
+    ];
 };
+
+/** The prose is hard-wrapped for the editor; an answer shouldn't be. */
+const unwrap = (text: string): string => text.replace(/\s*\n\s*/g, ' ').trim();
+
+/** He wrote the prose in the first person — the assistant quotes it, never speaks as him. */
+const inHisWords = (text: string): string => `In his words: "${unwrap(text)}"`;
+
+/**
+ * Sections of the prose that are instructions to the language model — how to
+ * sound, what never to say. They are not facts about him, and reciting them to
+ * a visitor ("Dry, confident, a little self-deprecating…") is just wrong.
+ */
+const INSTRUCTION_SECTIONS = /^(?:how i want the bot to sound|off-limits)$/i;
+
+interface ProseBlock {
+    /** The heading the block sits under. */
+    section: string;
+    text: string;
+    /** True for an item of a bulleted list. */
+    listed: boolean;
+}
+
+/**
+ * The free prose as answerable blocks: one per paragraph, one per bullet.
+ *
+ * Left out: the instruction sections above, his own TODO notes, and the bullet
+ * written in the model's voice ("you're talking to me right now").
+ */
+const proseBlocks = (): ProseBlock[] => {
+    const blocks: ProseBlock[] = [];
+    let section = '';
+
+    const keep = (text: string, listed = false) => {
+        const clean = text.trim();
+        if (!clean || /^(?:Q:\s*)?TODO\b/i.test(clean) || /\btalking to me\b/i.test(clean)) return;
+        blocks.push({ section, text: clean, listed });
+    };
+
+    for (const raw of PROFILE_PROSE.split(/\n\s*\n/)) {
+        const part = raw.trim();
+        if (!part) continue;
+
+        const heading = part.match(/^#+\s*(.+)$/);
+        if (heading && !part.includes('\n')) {
+            section = heading[1].trim();
+            continue;
+        }
+        if (INSTRUCTION_SECTIONS.test(section)) continue;
+
+        const lines = part.split('\n');
+        const firstBullet = lines.findIndex((line) => /^\s*-\s+/.test(line));
+        if (firstBullet === -1) {
+            keep(part);
+            continue;
+        }
+
+        // A lead-in that only exists to introduce the list ("Things worth
+        // pointing people at —") says nothing once the list is split off.
+        keep(lines.slice(0, firstBullet).join('\n').replace(/[^.!?]*[—:]\s*$/, ''));
+
+        let bullet = '';
+        for (const line of lines.slice(firstBullet)) {
+            if (/^\s*-\s+/.test(line)) {
+                keep(bullet, true);
+                bullet = line.replace(/^\s*-\s+/, '');
+            } else {
+                bullet += `\n${line.trim()}`;
+            }
+        }
+        keep(bullet, true);
+    }
+    return blocks;
+};
+
+/**
+ * The free prose as cards, so a question can pull in just the part that
+ * answers it. This is where availability, opinions, the site's hidden features
+ * and the "questions people actually ask" live.
+ */
+const proseCards = (): KnowledgeCard[] =>
+    proseBlocks().flatMap(({ section, text }, index): KnowledgeCard[] => {
+        const chips = ['His projects', 'Is he open to work?', 'Contact him'];
+
+        // "Q: …\nA: …" pairs: the question is what people will type, so it is
+        // the title; the answer is his, so it is quoted as his. Printing the
+        // raw pair made the assistant read "Q:" and "A:" aloud.
+        const qa = text.match(/^Q:\s*([\s\S]+?)\nA:\s*([\s\S]+)$/);
+        if (qa) {
+            const question = unwrap(qa[1]);
+            const reply = unwrap(qa[2]);
+            return [{
+                id: `prose:${index}`,
+                kind: 'faq',
+                title: question,
+                aliases: [normalize(question)],
+                keywords: [],
+                body: inHisWords(reply),
+                speak: `In his words: ${reply}`,
+                section: 'about',
+                chips,
+                weight: 1,
+            }];
+        }
+
+        const body = unwrap(text);
+        if (body.length <= 60) return [];
+
+        return [{
+            id: `prose:${index}`,
+            kind: 'faq',
+            title: body.length <= 70 ? body : `${body.slice(0, 60)}…`,
+            aliases: [],
+            // The heading is the only label a paragraph has ("About this site").
+            keywords: normalize(section).split(' ').filter((word) => word.length > 3),
+            body: inHisWords(body),
+            speak: `In his words: ${body}`,
+            section: 'about',
+            chips,
+            weight: 0.95,
+        }];
+    });
 
 /** The paragraph where he says what he's open to, if he has written one. */
 const availabilityProse = (): string | null =>
-    PROFILE_PROSE.split(/\n\s*\n/)
-        .map((part) => part.trim())
-        .find((part) => /\b(open to|available for|freelance|contract work)\b/i.test(part)) ?? null;
+    proseBlocks()
+        .map((block) => block.text)
+        .find((text) => !/^Q:/.test(text) && /\b(open to|available for|freelance|contract work)\b/i.test(text)) ?? null;
 
 const availabilityCard = (): KnowledgeCard => {
     const prose = availabilityProse();
@@ -574,18 +802,31 @@ const availabilityCard = (): KnowledgeCard => {
         keywords: ['availability', 'hire', 'freelance', 'opportunity', 'recruit', 'collaborate', 'contract'],
         // Quoted, never paraphrased into a commitment he didn't make.
         body: [
-            prose ?? `His portfolio doesn't spell out what he's available for right now.`,
+            prose ? inHisWords(prose) : `His portfolio doesn't spell out what he's available for right now.`,
             '',
             `The fastest way to ask is email: **${OWNER.email}**`,
         ].join('\n'),
         speak: prose
-            ? `${prose.split('. ').slice(0, 2).join('. ')}. The fastest way to ask is email.`
+            ? `In his words: ${unwrap(prose).replace(/\.$/, '')}. The fastest way to ask is email.`
             : `His portfolio doesn't spell that out. The fastest way to ask is email.`,
         section: 'contact',
         actions: [{ type: 'open_url', url: OWNER.emailHref, label: 'Write an email' }],
         chips: ['His experience', 'Download his CV', 'His email'],
         weight: 1.15,
     };
+};
+
+/**
+ * The things he says are worth finding on the site — the terminal, the game
+ * hub, the Reality toggle — as quoted one-liners for the site tour.
+ */
+const siteExtras = (): string[] => {
+    const extras = proseBlocks()
+        .filter((block) => block.listed && /\bsite\b/i.test(block.section))
+        .map((block) => unwrap(block.text).match(/^.*?[.!?](?=\s|$)/)?.[0] ?? unwrap(block.text))
+        .slice(0, 4);
+
+    return extras.length ? ['', `Worth finding, in his words:`, ...extras.map((extra) => `• "${extra}"`)] : [];
 };
 
 const featureCards = (): KnowledgeCard[] => [
@@ -630,8 +871,12 @@ const featureCards = (): KnowledgeCard[] => [
             `This portfolio has: **Home**, **About**, **Experience**, **Projects**, **GitHub**, **Skills**, **Education**, **Certifications** and **Contact**.`,
             '',
             `Say "take me to projects" and I'll scroll you there — or ask me to open a project, his GitHub or his resume.`,
+            ...siteExtras(),
         ].join('\n'),
         speak: `This site has home, about, experience, projects, GitHub, skills, education, certifications and contact. Tell me where to go and I'll take you there.`,
+        // The body names every section and quotes the extras, so indexing it
+        // would make this card a weak match for nearly any question.
+        noBodyIndex: true,
         chips: ['Take me to projects', 'Open his GitHub', 'Download his CV'],
     },
 ];
@@ -687,6 +932,7 @@ export const getCards = (): KnowledgeCard[] => {
         ...contactCards(),
         availabilityCard(),
         ...featureCards(),
+        ...proofCards(),
         ...proseCards(),
         ...metaCards(),
     ];

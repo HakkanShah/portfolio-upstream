@@ -10,6 +10,7 @@
  */
 
 import { askLocal, createMemory, type BrainMemory } from '../src/lib/assistant/engine';
+import { getProjects } from '../src/lib/assistant/brain/knowledge';
 
 interface Case {
     q: string;
@@ -77,10 +78,92 @@ const CASES: Case[] = [
     { after: 'tell me about ohmschool', q: 'whats the tech stack', any: ['OHMSchool'], mustAnswer: true },
     { after: 'tell me about commit habit', q: 'open it', any: ['Commit Habit'], mustAnswer: true, action: 'open_url' },
 
+    // --- reported in production: "tell me about ohm school" answered with his degree ---
+    { q: 'tell me about ohm school', expect: ['OHMSchool'], reject: ['B.Tech'], mustAnswer: true },
+    { q: 'ohm school', expect: ['OHMSchool'], reject: ['B.Tech'], mustAnswer: true },
+    { q: 'what does ohm school do', expect: ['OHMSchool'], reject: ['B.Tech'], mustAnswer: true },
+    { q: 'can you show me the ohm school project', expect: ['OHMSchool'], mustAnswer: true },
+    // ...while real education questions must still reach education
+    { q: 'tell me about his school', any: ['B.Tech', 'College'], reject: ['OHMSchool'], mustAnswer: true },
+    { q: 'does he have a degree', any: ['B.Tech'], mustAnswer: true },
+    { q: 'what did he study', any: ['B.Tech', 'CSE'], mustAnswer: true },
+
+    // --- other answers that were falling through ---
+    { q: 'where does he work', any: ['Persist'], mustAnswer: true },
+    { q: 'who does he work for', any: ['Persist'], mustAnswer: true },
+    { q: 'his skills', any: ['TypeScript', 'React', 'AI'], mustAnswer: true },
+    { q: 'his tech stack', any: ['TypeScript', 'React', 'AI'], mustAnswer: true },
+    // the headline project follows data.ts order rather than a hardcoded name
+    { q: 'best project', expect: ['OHMSchool'], mustAnswer: true },
+    { q: 'his most impressive project', expect: ['OHMSchool'], mustAnswer: true },
+
+    { q: 'what should i look at first', expect: ['OHMSchool'], reject: ['oldest'], mustAnswer: true },
+
+    // --- two answers that threw instead of answering (cards that no longer existed) ---
+    { q: 'where is he based', any: ['India'], mustAnswer: true },
+    { q: 'does he work remotely', any: ['India', 'remote'], mustAnswer: true },
+    { q: 'any open source work', any: ['open source'], mustAnswer: true, action: 'open_url' },
+    { q: 'is his code open source', any: ['open source'], reject: ['GitHub:**'], mustAnswer: true },
+
+    // --- a full-time job must not be called an internship ---
+    { q: 'how many internships', expect: ['full-time'], reject: ['3 internships'], mustAnswer: true },
+    { q: 'tell me about his internship', any: ['Persist'], reject: ['AWS'], mustAnswer: true },
+    { q: 'his work experience', expect: ['Persist'], mustAnswer: true },
+    { q: 'His experience', expect: ['Persist'], mustAnswer: true },
+
+    // --- questions a recruiter asks ---
+    { q: 'can i see his resume', any: ['resume'], mustAnswer: true, action: 'download' },
+    { q: 'his achievements', any: ['Startupathon'], mustAnswer: true },
+    { q: 'should i hire him', any: ['Startupathon', 'evidence'], mustAnswer: true },
+    { q: 'is he a good engineer', any: ['evidence'], mustAnswer: true },
+    { q: 'what makes him different', any: ['evidence'], mustAnswer: true },
+    { q: 'how many prs', any: ['pull requests'], mustAnswer: true },
+    { q: 'github stats', any: ['at a glance'], mustAnswer: true },
+
+    // --- his own notes are quoted, never read out raw or spoken as him ---
+    { q: 'what is he working on now', any: ['In his words'], reject: ['Q:', 'A:'], mustAnswer: true },
+    { q: 'is he self taught', any: ['In his words'], reject: ['Q:'], mustAnswer: true },
+    { q: 'is he available for freelance', any: ['In his words'], mustAnswer: true },
+    { q: 'tell me about the terminal', any: ['terminal'], reject: ['TODO'], mustAnswer: true },
+    { q: 'what is reality mode', any: ['Reality'], mustAnswer: true },
+    // instructions written for the model are not facts to recite
+    { q: 'how should the bot sound', reject: ['self-deprecating', 'Never oversell'] },
+    { q: 'what are his opinions', reject: ['TODO'] },
+
+    // --- a project's code, and a project's stack ---
+    { q: 'can i see the code for aura', expect: ['AURA'], any: ["isn't public"], mustAnswer: true },
+    { q: 'source code of mockhick', expect: ['MockHick', 'github.com'], mustAnswer: true, action: 'open_url' },
+    { q: 'does aura use python', expect: ['Yes', 'AURA'], mustAnswer: true },
+
+    // --- two skills sharing a first word are still two skills ---
+    { q: 'does he know react', expect: ['React.js'], reject: ['React Native'], mustAnswer: true },
+    { q: 'does he know react native', expect: ['React Native'], mustAnswer: true },
+    { q: 'does he know firebase', expect: ['Firebase'], reject: ['Firebase Studio'], mustAnswer: true },
+    { q: 'does he use node', expect: ['Node.js'], mustAnswer: true },
+
     // --- out of scope: must not pretend ---
     { q: 'what is the weather today', any: ['portfolio', 'not sure', 'not certain'] },
     { q: 'who won the world cup', any: ['portfolio', 'not sure', 'not certain'] },
 ];
+
+/**
+ * Every project must be findable by the name a visitor would type, however
+ * they space it. "OHMSchool" shipped matching only as one word, so "ohm
+ * school" fell through to the education answer in production.
+ */
+const spacedNameCases = (): Case[] =>
+    getProjects().map((project) => {
+        const spaced = project.title
+            .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+            .toLowerCase();
+
+        return {
+            q: `tell me about ${spaced}`,
+            expect: [project.title],
+            mustAnswer: true,
+        };
+    });
 
 const run = () => {
     const failuresOnly = process.argv.includes('--fail');
@@ -88,7 +171,9 @@ const run = () => {
     const failures: string[] = [];
     const timings: number[] = [];
 
-    for (const testCase of CASES) {
+    const allCases = [...CASES, ...spacedNameCases()];
+
+    for (const testCase of allCases) {
         let memory: BrainMemory = createMemory();
         if (testCase.after) memory = askLocal(testCase.after, memory).memory;
 
@@ -126,6 +211,8 @@ const run = () => {
         }
     }
 
+    const total = allCases.length;
+
     if (failures.length) {
         console.log(`\n${'='.repeat(70)}\nFAILURES\n${'='.repeat(70)}`);
         failures.forEach((failure) => console.log(`${failure}\n`));
@@ -133,7 +220,7 @@ const run = () => {
 
     const average = timings.reduce((sum, time) => sum + time, 0) / timings.length;
     console.log('='.repeat(70));
-    console.log(`${passed}/${CASES.length} passed (${Math.round((passed / CASES.length) * 100)}%)`);
+    console.log(`${passed}/${total} passed (${Math.round((passed / total) * 100)}%)`);
     console.log(`avg ${average.toFixed(2)}ms · slowest ${Math.max(...timings).toFixed(2)}ms (first call builds the index)`);
 
     process.exitCode = failures.length ? 1 : 0;
