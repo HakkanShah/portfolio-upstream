@@ -19,7 +19,6 @@ import {
     GITHUB_STATS,
     PROJECTS,
     SKILLS,
-    SOCIAL_LINKS,
 } from '@/lib/data';
 import { PROFILE_PROSE } from '@/content/profile';
 import { normalize } from './nlp';
@@ -28,11 +27,25 @@ import type { KnowledgeCard } from './types';
 
 // ============ Identity, derived from the data ============
 
-const contactHref = (name: string): string =>
-    CONTACT_INFO.find((entry) => entry.name === name)?.href ?? '';
+/**
+ * Contact fields the assistant must never read out, matching the policy in
+ * profile.ts: the number is on the page for humans, but a bot will hand it to
+ * any scraper that asks politely.
+ */
+const PRIVATE_CONTACT_FIELDS = new Set(['Phone']);
 
-const contactValue = (name: string): string =>
-    CONTACT_INFO.find((entry) => entry.name === name)?.value ?? '';
+const isPublicChannel = (name: string): boolean => !PRIVATE_CONTACT_FIELDS.has(name);
+
+/**
+ * Every contact lookup goes through here, so the private-field policy is
+ * enforced at the one point of access rather than remembered at each card.
+ */
+const contactEntry = (name: string) =>
+    isPublicChannel(name) ? CONTACT_INFO.find((entry) => entry.name === name) : undefined;
+
+const contactHref = (name: string): string => contactEntry(name)?.href ?? '';
+
+const contactValue = (name: string): string => contactEntry(name)?.value ?? '';
 
 export const OWNER = {
     firstName: 'Hakkan',
@@ -42,8 +55,6 @@ export const OWNER = {
     location: 'India, working remotely',
     email: contactValue('Email'),
     emailHref: contactHref('Email'),
-    phone: contactValue('Phone'),
-    phoneHref: contactHref('Phone'),
     github: contactHref('GitHub'),
     linkedin: contactHref('LinkedIn'),
     googleDev: contactHref('G.Dev Profile'),
@@ -470,7 +481,7 @@ const contactCards = (): KnowledgeCard[] => [
         title: 'LinkedIn profile',
         aliases: ['linkedin', 'linked in', 'linkedin profile'],
         keywords: ['linkedin', 'professional', 'network', 'connect'],
-        body: `💼 **LinkedIn:** linkedin.com/in/hakkan`,
+        body: `💼 **LinkedIn:** ${OWNER.linkedin.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}`,
         speak: `Connect with him on LinkedIn, at linkedin dot com slash in slash hakkan.`,
         section: 'contact',
         actions: [{ type: 'open_url', url: OWNER.linkedin, label: 'Open LinkedIn' }],
@@ -487,7 +498,7 @@ const contactCards = (): KnowledgeCard[] => [
             '',
             `📧 ${OWNER.email}`,
             `💻 GitHub — ${GITHUB_STATS.username}`,
-            `💼 LinkedIn — linkedin.com/in/hakkan`,
+            `💼 LinkedIn — ${OWNER.linkedin.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}`,
             '',
             `There's a contact form in the Contact section too.`,
         ].join('\n'),
@@ -685,6 +696,3 @@ export const getCards = (): KnowledgeCard[] => {
 
 export const getCardById = (id: string): KnowledgeCard | undefined =>
     getCards().find((card) => card.id === id);
-
-/** Kept for the social links the cards don't carry. */
-export const getSocialLinks = () => SOCIAL_LINKS.map(({ name, url }) => ({ name, url }));

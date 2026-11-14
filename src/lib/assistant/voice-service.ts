@@ -469,6 +469,12 @@ const findBestVoice = (voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
 
 /** Names a speech engine would otherwise mangle. */
 const PRONUNCIATION_OVERRIDES: Array<[RegExp, string]> = [
+    [/\bOHMSchool\b/gi, 'Ohm School'],
+    [/\bK-12\b/gi, 'K twelve'],
+    [/\bLLMs\b/g, 'L.L.M.s'],
+    [/\bLLM\b/g, 'L.L.M.'],
+    [/\bRAG\b/g, 'rag'],
+    [/\bDOM\b/g, 'D.O.M.'],
     [/\bMockHick\b/gi, 'Mock Hick'],
     [/\bReelXtract\b/gi, 'Reel Extract'],
     [/\bMath-O-Matic\b/gi, 'Math o Matic'],
@@ -692,7 +698,17 @@ export const speak = (
             utterance.rate = rate;
             utterance.pitch = options.voicePitch ?? 1.08;
             utterance.volume = 1;
-            if (cachedVoice) utterance.voice = cachedVoice;
+
+            // A cached voice can go stale when the browser reloads its list.
+            // Assigning a stale one throws, and this runs in its own task, so
+            // the throw would escape `speak`'s try/catch and lose the answer.
+            if (cachedVoice) {
+                try {
+                    utterance.voice = cachedVoice;
+                } catch {
+                    cachedVoice = null;
+                }
+            }
 
             utterance.onstart = () => {
                 if (!isCurrent()) return;
@@ -723,7 +739,13 @@ export const speak = (
                 speakChunk(index + 1);
             };
 
-            synth.speak(utterance);
+            try {
+                synth.speak(utterance);
+            } catch (error) {
+                console.warn('Could not queue speech chunk:', error);
+                // Skip the bad chunk rather than dropping the whole answer.
+                speakChunk(index + 1);
+            }
         };
 
         // If nothing starts, release the UI instead of freezing mid-animation.

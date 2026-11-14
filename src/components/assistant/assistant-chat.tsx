@@ -36,7 +36,19 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
         isLoading,
         suggestions: followUps,
         runAction,
+        handsFree,
+        setHandsFree,
+        setVoiceModeActive,
+        replayLast,
+        canReplay,
     } = useAssistant();
+
+    // Tell the provider when voice mode is the one on screen, so hands-free
+    // turn-taking only ever applies here.
+    useEffect(() => {
+        setVoiceModeActive(mode === 'voice');
+        return () => setVoiceModeActive(false);
+    }, [mode, setVoiceModeActive]);
 
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -87,6 +99,7 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
 
     // The newest answer's buttons and follow-ups, shown in both modes.
     const lastAssistantMessage = [...messages].reverse().find((message) => message.role === 'assistant');
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
     const pendingActions = !isThinking ? lastAssistantMessage?.actions ?? [] : [];
     const showFollowUps = !isThinking && !isListening && Boolean(lastAssistantMessage) && followUps.length > 0;
 
@@ -129,6 +142,25 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
             {/* Voice Mode UI - Compact controls at bottom, 3D bot is main focus in parent */}
             {mode === 'voice' ? (
                 <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4 border-t border-border bg-background/50 backdrop-blur-sm">
+                    {/* The last exchange, so a misheard question is visible */}
+                    {(lastUserMessage || lastAssistantMessage) && (
+                        <div className="mb-3 space-y-1 rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
+                            {lastUserMessage && (
+                                <p className="text-[11px] leading-snug text-muted-foreground">
+                                    <span className="font-semibold text-primary/80">You: </span>
+                                    {lastUserMessage.content.length > 90
+                                        ? `${lastUserMessage.content.slice(0, 90)}…`
+                                        : lastUserMessage.content}
+                                </p>
+                            )}
+                            {lastAssistantMessage && (
+                                <p className="text-xs leading-snug text-foreground/90 line-clamp-3">
+                                    {lastAssistantMessage.content.replace(/[*_`#]/g, '').slice(0, 200)}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     {/* What the assistant just offered to do */}
                     {actionButtons && <div className="mb-3 flex justify-center">{actionButtons}</div>}
 
@@ -204,6 +236,40 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                         </div>
                     </div>
 
+                    {/* Hands-free turn-taking, and hearing the answer again */}
+                    <div className="mt-3 flex items-center justify-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setHandsFree(!handsFree)}
+                            aria-pressed={handsFree}
+                            title="Keep the mic open between turns"
+                            className={cn(
+                                'rounded-full border px-3 py-1 text-[11px] font-medium transition-colors',
+                                handsFree
+                                    ? 'border-primary/50 bg-primary/15 text-foreground'
+                                    : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            {handsFree ? '🎙️ Hands-free on' : 'Hands-free off'}
+                        </button>
+
+                        {canReplay && (
+                            <button
+                                type="button"
+                                onClick={replayLast}
+                                disabled={isListening}
+                                title="Say that again"
+                                className={cn(
+                                    'rounded-full border border-border bg-muted/30 px-3 py-1 text-[11px] font-medium',
+                                    'text-muted-foreground transition-colors hover:text-foreground',
+                                    'disabled:opacity-40 disabled:pointer-events-none'
+                                )}
+                            >
+                                ↻ Repeat
+                            </button>
+                        )}
+                    </div>
+
                     {/* Hint */}
                     <p className="text-xs text-muted-foreground text-center mt-3 min-h-[16px]">
                         {!voiceSupported
@@ -217,7 +283,9 @@ const AssistantChat: React.FC<AssistantChatProps> = ({ className, mode = 'text' 
                                         : !voiceEnabled
                                             // Otherwise a muted bot just looks broken.
                                             ? 'Answers are muted — tap Voice Off to hear them.'
-                                            : 'Tap the mic and ask about his projects, stack or experience.'}
+                                            : handsFree
+                                                ? 'Tap the mic once — I keep listening between answers.'
+                                                : 'Tap the mic and ask about his projects, stack or experience.'}
                     </p>
                 </div>
             ) : (

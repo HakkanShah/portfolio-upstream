@@ -18,6 +18,7 @@ import {
     speak,
     cancelSpeaking,
     isVoiceSupported,
+    isCurrentlySpeaking,
     isSpeechRecognitionSupported,
     preloadVoices,
     primeSpeechSynthesis,
@@ -61,6 +62,15 @@ interface AssistantContextType {
     suggestions: string[];
     /** Run one of an answer's actions, e.g. from a tapped button. */
     runAction: (action: AssistantAction) => void;
+    /** Keep the mic open between turns so a voice conversation flows. */
+    handsFree: boolean;
+    setHandsFree: (enabled: boolean) => void;
+    /** Voice mode tells the provider it is on screen, so hands-free applies. */
+    setVoiceModeActive: (active: boolean) => void;
+    /** Say the last answer again. */
+    replayLast: () => void;
+    /** True when the last answer can be replayed. */
+    canReplay: boolean;
     sendMessage: (text: string) => void;
     startVoiceInput: () => void;
     startVoiceToText: (onTranscript: (text: string) => void) => void;
@@ -75,15 +85,19 @@ interface AssistantContextType {
 }
 
 const VOICE_PREFERENCE_KEY = 'hakkan_assistant_voice_enabled';
+const HANDS_FREE_KEY = 'hakkan_assistant_hands_free';
 
-const readVoicePreference = (): boolean => {
-    if (typeof window === 'undefined') return true;
+const readStoredFlag = (key: string, fallback: boolean): boolean => {
+    if (typeof window === 'undefined') return fallback;
     try {
-        return window.localStorage.getItem(VOICE_PREFERENCE_KEY) !== 'false';
+        const stored = window.localStorage.getItem(key);
+        return stored === null ? fallback : stored !== 'false';
     } catch {
-        return true;
+        return fallback;
     }
 };
+
+const readVoicePreference = (): boolean => readStoredFlag(VOICE_PREFERENCE_KEY, true);
 
 /**
  * What each failure sounds like. The chat bubble can afford emoji, markdown
@@ -133,8 +147,43 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // the old suggested-topic bookkeeping.
     const historyRef = useRef<Turn[]>([]);
 
+    const [handsFree, setHandsFreeState] = useState(true);
+    const [canReplay, setCanReplay] = useState(false);
+
     /** Shown once if the browser never actually plays our speech. */
     const speechNoticeShownRef = useRef(false);
+
+    // Read inside speech callbacks, which capture their creation-time values.
+    const handsFreeRef = useRef(handsFree);
+    const voiceModeActiveRef = useRef(false);
+    const isOpenRef = useRef(false);
+    /** Set when the visitor stops playback themselves — don't reopen the mic. */
+    const suppressAutoListenRef = useRef(false);
+    /** The last thing said out loud, so it can be replayed. */
+    const lastSpokenRef = useRef<string>('');
+    /** startVoiceInput is defined below; speech callbacks reach it from here. */
+    const startVoiceInputRef = useRef<(() => void) | null>(null);
+
+    useEffect(() => {
+        handsFreeRef.current = handsFree;
+    }, [handsFree]);
+
+    useEffect(() => {
+        isOpenRef.current = isOpen;
+    }, [isOpen]);
+
+    const setHandsFree = useCallback((enabled: boolean) => {
+        setHandsFreeState(enabled);
+        try {
+            window.localStorage.setItem(HANDS_FREE_KEY, String(enabled));
+        } catch {
+            // Private mode — the preference just won't persist.
+        }
+    }, []);
+
+    const setVoiceModeActive = useCallback((active: boolean) => {
+        voiceModeActiveRef.current = active;
+    }, []);
 
     /** The brain's own memory: "tell me more", "open it", "its stack". */
     const memoryRef = useRef<BrainMemory>(createMemory());
@@ -156,6 +205,7 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     useEffect(() => {
         setVoiceSupported(isVoiceSupported());
         setVoiceEnabledState(readVoicePreference());
+        setHandsFreeState(readStoredFlag(HANDS_FREE_KEY, true));
         preloadVoices();
     }, []);
 
@@ -170,6 +220,8 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, []);
 
     const stopSpeaking = useCallback(() => {
+        // The visitor chose silence; don't answer that by opening the mic.
+        suppressAutoListenRef.current = true;
         cancelSpeaking();
         setCaption(null);
         setState((current) => (current === 'speaking' ? 'idle' : current));
@@ -187,6 +239,24 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     useEffect(() => () => {
         cancelSpeaking();
         stopListening();
+    }, []);
+
+    /**
+     * A backgrounded tab is the classic way to strand speech synthesis: the
+     * audio stops but `onend` never fires, so the bot sits in its speaking
+     * animation forever. Leaving also shouldn't leave a live microphone.
+     */
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (!document.hidden) return;
+            cancelSpeaking();
+            stopListening();
+            setCaption(null);
+            setState((current) => (current === 'speaking' || current === 'listening' ? 'idle' : current));
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, []);
 
     // Helper to generate unique ID
@@ -278,6 +348,8 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }, estimatedMs);
 
             let started = false;
+            lastSpokenRef.current = speakText;
+            setCanReplay(true);
 
             speak(
                 speakText,
@@ -297,6 +369,34 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                             'info'
                         );
                     }
+
+                    /**
+                     * Hands-free: a voice conversation shouldn't need a tap
+                     * between every turn. Only after the assistant actually
+                     * spoke, only while voice mode is on screen, and never
+                     * when the visitor stopped playback themselves.
+                     */
+                    const handBackToVisitor =
+                        started &&
+                        handsFreeRef.current &&
+                        voiceModeActiveRef.current &&
+                        isOpenRef.current &&
+                        !suppressAutoListenRef.current;
+
+                    suppressAutoListenRef.current = false;
+
+                    if (handBackToVisitor) {
+                        setTimeout(() => {
+                            if (
+                                handsFreeRef.current &&
+                                voiceModeActiveRef.current &&
+                                isOpenRef.current &&
+                                !isCurrentlySpeaking()
+                            ) {
+                                startVoiceInputRef.current?.();
+                            }
+                        }, 450);
+                    }
                 },
                 () => {
                     started = true;
@@ -310,6 +410,27 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         return message;
     }, [voiceEnabled, runActions, addSystemMessage]);
+
+    /** Say the last answer again, without re-asking the question. */
+    const replayLast = useCallback(() => {
+        const text = lastSpokenRef.current;
+        if (!text) return;
+
+        cancelSpeaking();
+        // A replay is a deliberate listen-again, not an invitation to talk.
+        suppressAutoListenRef.current = true;
+        setCaption({ text, source: 'assistant' });
+
+        speak(
+            text,
+            () => {
+                setState((current) => (current === 'speaking' ? 'idle' : current));
+                setCaption(null);
+            },
+            () => setState('speaking'),
+            { onCaption: (chunk) => setCaption({ text: chunk, source: 'assistant' }) }
+        );
+    }, []);
 
     // Expose generic addMessage
     const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
@@ -550,6 +671,10 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }, [voiceSupported, voiceEnabled, processInput, handleVoiceError, announce]);
 
     // Start voice-to-text (fills input box instead of auto-sending)
+    useEffect(() => {
+        startVoiceInputRef.current = startVoiceInput;
+    }, [startVoiceInput]);
+
     const transcriptCallbackRef = useRef<((text: string) => void) | null>(null);
 
     const startVoiceToText = useCallback((onTranscript: (text: string) => void) => {
@@ -606,6 +731,8 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setIsLoading(false);
         historyRef.current = [];
         memoryRef.current = createMemory();
+        lastSpokenRef.current = '';
+        setCanReplay(false);
         setSuggestions(['Show his projects', 'What does he build?', 'Is he open to work?']);
     }, []);
 
@@ -620,6 +747,11 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         isSpeaking: state === 'speaking',
         suggestions,
         runAction,
+        handsFree,
+        setHandsFree,
+        setVoiceModeActive,
+        replayLast,
+        canReplay,
         sendMessage,
         startVoiceInput,
         startVoiceToText,

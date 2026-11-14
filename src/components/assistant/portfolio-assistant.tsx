@@ -46,7 +46,7 @@ const readChatMode = (): ChatMode => {
 };
 
 const AssistantInner: React.FC = () => {
-    const { isOpen, setIsOpen, state, voiceEnabled, messages, caption, sendMessage } = useAssistant();
+    const { isOpen, setIsOpen, state, voiceEnabled, messages, caption, sendMessage, stopSpeaking } = useAssistant();
     const [isMinimized, setIsMinimized] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [chatMode, setChatModeState] = useState<ChatMode>('voice');
@@ -553,12 +553,23 @@ const AssistantInner: React.FC = () => {
                                                 {/* Interaction blocker overlay during active states */}
                                                 {(state === 'speaking' || state === 'thinking' || state === 'listening' || overrideState === 'speaking') && (
                                                     <div
-                                                        className="absolute inset-0 z-50"
+                                                        className={cn(
+                                                            'absolute inset-0 z-50',
+                                                            state === 'speaking' && 'cursor-pointer'
+                                                        )}
                                                         style={{ pointerEvents: 'all' }}
+                                                        role={state === 'speaking' ? 'button' : undefined}
+                                                        aria-label={state === 'speaking' ? 'Stop speaking' : undefined}
+                                                        title={state === 'speaking' ? 'Tap to stop' : undefined}
                                                         onMouseMove={(e) => e.stopPropagation()}
-                                                        onClick={(e) => e.stopPropagation()}
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                         onMouseUp={(e) => e.stopPropagation()}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // Interrupting a talking assistant should be as easy
+                                                            // as interrupting a person.
+                                                            if (state === 'speaking') stopSpeaking();
+                                                        }}
                                                     />
                                                 )}
 

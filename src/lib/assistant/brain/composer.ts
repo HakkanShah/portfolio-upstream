@@ -122,7 +122,6 @@ export const projectAnswer = (project: ProjectEntry, aspect: Aspect): BrainAnswe
         );
     }
 
-    const fact = '';
     return answer(
         'project:detail',
         [
@@ -132,7 +131,7 @@ export const projectAnswer = (project: ProjectEntry, aspect: Aspect): BrainAnswe
             '',
             `**Stack:** ${project.tags.join(', ')}`,
             projectLinks(project),
-        ].join('\n') + fact,
+        ].join('\n'),
         {
             speak: `${project.title}. ${project.description} ${project.longDescription.split('. ').slice(0, 2).join('. ')}. It's built with ${project.tags.slice(0, 4).join(', ')}.`,
             chips,
@@ -467,15 +466,17 @@ const CHANNEL_TEXT: Record<Exclude<ContactChannel, null>, { text: string; speak:
         speak: `His email is ${OWNER.email.replace('@', ' at ').replace(/\./g, ' dot ')}.`,
     },
     phone: {
-        text: `📱 **${OWNER.phone}** — [call](tel:+917810843038). A text first is appreciated.`,
-        speak: `His number is plus 91 7 8 1 0 8 4 3 0 3 8. A text first is appreciated.`,
+        // The number is on the page for humans; a bot that reads it out loud
+        // is a scraper's best friend. Point at email instead.
+        text: `His number is on the page itself, in the Contact section — I don't read it out. 📧 **${OWNER.email}** reaches him just as fast.`,
+        speak: `His number is in the contact section of the page — I don't read it out. Email reaches him just as fast.`,
     },
     github: {
         text: `💻 **GitHub:** [HakkanShah](${OWNER.github}) — ${GITHUB_STATS.publicRepos} public repos, ${GITHUB_STATS.totalPRs} merged PRs, ${GITHUB_STATS.longestStreak.days}-day longest streak.`,
         speak: `His GitHub is github dot com slash HakkanShah, with ${GITHUB_STATS.publicRepos} public repositories.`,
     },
     linkedin: {
-        text: `💼 **LinkedIn:** [linkedin.com/in/hakkan](${OWNER.linkedin})`,
+        text: `💼 **LinkedIn:** [${OWNER.linkedin.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}](${OWNER.linkedin})`,
         speak: `His LinkedIn is linkedin dot com slash in slash hakkan.`,
     },
     googleDev: {
@@ -486,7 +487,7 @@ const CHANNEL_TEXT: Record<Exclude<ContactChannel, null>, { text: string; speak:
 
 const CHANNEL_ACTION: Record<Exclude<ContactChannel, null>, AssistantAction | null> = {
     email: { type: 'open_url', url: OWNER.emailHref, label: 'Write an email' },
-    phone: { type: 'open_url', url: OWNER.phoneHref, label: 'Call him' },
+    phone: { type: 'navigate', target: 'contact', label: 'Go to contact' },
     github: { type: 'open_url', url: OWNER.github, label: 'Open GitHub' },
     linkedin: { type: 'open_url', url: OWNER.linkedin, label: 'Open LinkedIn' },
     googleDev: { type: 'open_url', url: OWNER.googleDev, label: 'Open profile' },
@@ -687,7 +688,7 @@ export const funFactAnswer = (): BrainAnswer => {
     const facts = [
         project ? `**${project.title}:** ${project.why}` : null,
         `This portfolio hides a game hub — click his profile photo in the home section a few times.`,
-        `His longest GitHub streak is ${GITHUB_STATS.longestStreak.days}-day, across ${GITHUB_STATS.publicRepos} public repos.`,
+        `His longest GitHub streak ran ${GITHUB_STATS.longestStreak.days} days, across ${GITHUB_STATS.publicRepos} public repos.`,
         `**MockHick** is named after the Hindi word "Maukhik" (मौखिक), meaning *spoken*.`,
     ].filter(Boolean) as string[];
 
