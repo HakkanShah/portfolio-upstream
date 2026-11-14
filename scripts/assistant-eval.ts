@@ -42,9 +42,11 @@ const CASES: Case[] = [
 
     // --- projects ---
     { q: 'show me his projects', any: ['OHMSchool', 'AURA'], mustAnswer: true },
-    { q: 'how many projects has he built', any: ['14', 'projects'], mustAnswer: true },
+    { q: 'how many projects has he built', any: ['13', 'projects'], mustAnswer: true },
     { q: 'tell me about ohmschool', expect: ['OHMSchool'], mustAnswer: true, action: 'open_url' },
     { q: 'what is aura', expect: ['AURA'], mustAnswer: true, action: 'open_url' },
+    { q: 'what is ek aur', expect: ['Ek Aur'], any: ['Reels', 'Shorts'], mustAnswer: true, action: 'open_url' },
+    { q: 'does he build android apps', any: ['Ek Aur', 'Kotlin', 'Android'], mustAnswer: true },
     { q: 'tell me about commit habit', expect: ['Commit Habit'], mustAnswer: true },
     { q: 'what is mockhick', expect: ['MockHick'], mustAnswer: true },
     { q: 'open ohmschool', expect: ['OHMSchool'], mustAnswer: true, action: 'open_url' },

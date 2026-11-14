@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import ProjectThumbnail from './project-thumbnail';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
@@ -64,12 +65,11 @@ const ProjectsSection = () => {
                       className="relative w-full h-48 sm:h-52 md:h-56 overflow-hidden cursor-pointer"
                       onClick={() => setSelectedProject(project)}
                     >
-                      <Image
+                      <ProjectThumbnail
                         src={project.thumbnail}
                         alt={project.title}
-                        fill
+                        aiHint={project.aiHint}
                         className="object-cover border-b-4 border-foreground transition-transform duration-500 group-hover:scale-110"
-                        data-ai-hint={project.aiHint}
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       />
                       {/* Gradient overlay */}
