@@ -9,6 +9,7 @@ import type { Project } from '@/lib/data';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { projectSlug } from '@/lib/seo';
 
 interface ProjectDetailsModalProps {
   project: Project | null;
@@ -173,6 +174,14 @@ const ProjectDetailsModal = ({ project, isOpen, onClose, onImageClick }: Project
                   </Button>
                 </Link>
               </motion.div>
+              <p className="mt-4 text-center">
+                <Link
+                  href={`/projects/${projectSlug(project)}`}
+                  className="font-bold text-primary underline underline-offset-4 decoration-2 hover:text-accent"
+                >
+                  Full project page →
+                </Link>
+              </p>
             </div>
           </div>
         </div>

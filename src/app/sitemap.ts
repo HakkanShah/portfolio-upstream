@@ -1,19 +1,35 @@
 import type { MetadataRoute } from 'next';
-
-const SITE_URL = 'https://hakkan.is-a.dev';
+import { PROJECTS } from '@/lib/data';
+import { OG_IMAGE, PROFILE_PHOTO, SITE_URL, projectUrl } from '@/lib/seo';
 
 /**
- * One page, so one entry. The images ride along so Google Images can tie the
- * profile photo and the share card to this page.
+ * The home page and one page per project. Images ride along so image search
+ * can tie the photos and screenshots to their pages.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
+    const now = new Date();
     return [
         {
             url: `${SITE_URL}/`,
-            lastModified: new Date(),
+            lastModified: now,
             changeFrequency: 'weekly',
             priority: 1,
-            images: [`${SITE_URL}/profile.jpg`, `${SITE_URL}/og-hakkan-shah.jpg`],
+            images: [`${SITE_URL}${PROFILE_PHOTO}`, `${SITE_URL}${OG_IMAGE}`],
         },
+        // The standalone pages: what search engines show as sitelinks.
+        ...['/projects', '/experience', '/contact', '/faq'].map((path) => ({
+            url: `${SITE_URL}${path}`,
+            lastModified: now,
+            changeFrequency: 'monthly' as const,
+            priority: 0.8,
+        })),
+        ...PROJECTS.map((project, index) => ({
+            url: projectUrl(project),
+            lastModified: now,
+            changeFrequency: 'monthly' as const,
+            // The first projects are the ones he leads with.
+            priority: index < 3 ? 0.9 : 0.7,
+            images: [`${SITE_URL}${project.thumbnail}`],
+        })),
     ];
 }

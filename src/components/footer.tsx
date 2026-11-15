@@ -1,10 +1,12 @@
 'use client';
 
-import { SOCIAL_LINKS } from '@/lib/data';
+import { PROJECTS, SOCIAL_LINKS } from '@/lib/data';
 import Link from 'next/link';
 import { ArrowUp, Terminal, Heart, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
+import { SITE_PAGES } from '@/components/subpage-shell';
+import { projectSlug } from '@/lib/seo';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -99,6 +101,33 @@ const Footer = () => {
           </div>
         </div>
       </div>
+
+      {/* Site map: real page URLs (not #anchors), which is what search
+          engines turn into sitelinks, plus every project page. */}
+      <nav aria-label="Site map" className="section-container relative z-10 pb-10 text-sm">
+        <div className="grid gap-6 border-t border-white/10 pt-8 md:grid-cols-[auto_1fr] md:gap-12">
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-primary/80">Pages</p>
+            <ul className="flex flex-wrap gap-x-5 gap-y-2 md:flex-col">
+              {SITE_PAGES.map((page) => (
+                <li key={page.href}>
+                  <Link href={page.href} className="text-gray-400 hover:text-white">{page.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-primary/80">All projects</p>
+            <ul className="flex flex-wrap gap-x-5 gap-y-2">
+              {PROJECTS.map((project) => (
+                <li key={project.title}>
+                  <Link href={`/projects/${projectSlug(project)}`} className="text-gray-400 hover:text-white">{project.title}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </nav>
 
       {/* Bottom Bar */}
       <div className="w-full bg-black/50 backdrop-blur-md py-3 text-center border-t border-white/5 relative z-10">

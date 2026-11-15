@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster"
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import VisitorTracker from '@/components/visitor-tracker';
+import { HOME_DESCRIPTION, HOME_TITLE, NAME, OG_IMAGE, PERSON_ID, PROFILES, SITE_URL, WEBSITE_ID, personSchema } from '@/lib/seo';
 
 // Only the two families the design actually uses: Bangers via `font-headline`
 // and Comic Neue via `font-body`. Everything else resolves to the system stack,
@@ -24,12 +25,8 @@ const comicNeue = Comic_Neue({
   display: 'swap',
 });
 
-const SITE_URL = 'https://hakkan.is-a.dev';
-const NAME = 'Hakkan Shah';
-const TITLE = 'Hakkan Shah – Full Stack AI Engineer & AI Agent Developer';
-const DESCRIPTION =
-  'Hakkan Shah is a Full Stack AI Engineer in India. He builds AI agents, LLM apps and full stack products with Next.js, TypeScript and Python. Creator of OHMSchool & AURA.';
-const OG_IMAGE = '/og-hakkan-shah.jpg';
+const TITLE = HOME_TITLE;
+const DESCRIPTION = HOME_DESCRIPTION;
 
 export const viewport: Viewport = {
   themeColor: [
@@ -125,106 +122,27 @@ export const metadata: Metadata = {
 };
 
 /**
- * Structured data for Google, as one graph:
- *   - WebSite: its `name` is what Google shows as the site name, in place of
- *     "is-a.dev".
- *   - ProfilePage + Person: marks this as the profile of one person, which
- *     is what Google uses for a personal site in name searches.
+ * Structured data true of every page: the website (its `name` is what Google
+ * shows as the site name) and the person it belongs to (lib/seo.ts). Each
+ * page adds its own: the home page's ProfilePage, project list and FAQ, a
+ * project page's SoftwareApplication, and so on.
  */
 const STRUCTURED_DATA = {
   '@context': 'https://schema.org',
   '@graph': [
     {
       '@type': 'WebSite',
-      '@id': `${SITE_URL}/#website`,
+      '@id': WEBSITE_ID,
       url: `${SITE_URL}/`,
       name: NAME,
-      alternateName: ['Hakkan', 'Hakkan Shah Portfolio', 'Hakkan Parbej Shah'],
+      // Not the legal name: Google picked it as the site name when it was listed
+      // here. It stays on the Person, where it belongs.
+      alternateName: ['Hakkan Shah Portfolio', 'hakkan.is-a.dev'],
       description: DESCRIPTION,
       inLanguage: 'en',
-      publisher: { '@id': `${SITE_URL}/#person` },
+      publisher: { '@id': PERSON_ID },
     },
-    {
-      '@type': 'ProfilePage',
-      '@id': `${SITE_URL}/#profilepage`,
-      url: `${SITE_URL}/`,
-      name: TITLE,
-      description: DESCRIPTION,
-      inLanguage: 'en',
-      isPartOf: { '@id': `${SITE_URL}/#website` },
-      mainEntity: { '@id': `${SITE_URL}/#person` },
-      primaryImageOfPage: { '@id': `${SITE_URL}/#profile-photo` },
-      dateModified: new Date().toISOString(),
-    },
-    {
-      '@type': 'Person',
-      '@id': `${SITE_URL}/#person`,
-      name: NAME,
-      alternateName: ['Hakkan Parbej Shah', 'Hakkan'],
-      givenName: 'Hakkan',
-      familyName: 'Shah',
-      url: `${SITE_URL}/`,
-      image: {
-        '@type': 'ImageObject',
-        '@id': `${SITE_URL}/#profile-photo`,
-        url: `${SITE_URL}/profile.jpg`,
-        width: 1024,
-        height: 1364,
-        caption: 'Hakkan Shah',
-      },
-      jobTitle: 'Full Stack AI Engineer',
-      description:
-        'Full Stack AI Engineer at Persist, building AI agents that act on real interfaces, the full stack systems behind them, and the product UI that makes them feel obvious. Creator of OHMSchool and AURA.',
-      email: 'mailto:hakkanparbej@gmail.com',
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: 'Kolkata',
-        addressRegion: 'West Bengal',
-        addressCountry: 'IN',
-      },
-      nationality: { '@type': 'Country', name: 'India' },
-      worksFor: {
-        '@type': 'Organization',
-        name: 'Persist',
-        url: 'https://persist.org/',
-      },
-      hasOccupation: [
-        {
-          '@type': 'Occupation',
-          name: 'Full Stack AI Engineer',
-          occupationLocation: { '@type': 'Country', name: 'India' },
-          skills: 'AI agents, LLM applications, RAG, Next.js, TypeScript, Node.js, Python, React',
-        },
-        { '@type': 'Occupation', name: 'AI Engineer' },
-        { '@type': 'Occupation', name: 'Full Stack Engineer' },
-      ],
-      alumniOf: {
-        '@type': 'CollegeOrUniversity',
-        name: 'Greater Kolkata College of Engineering and Management',
-      },
-      award: "Winner, Persist Startupathon (Feb 2026) — chosen from 250+ builders",
-      knowsAbout: [
-        'Artificial Intelligence',
-        'AI Agents',
-        'Large Language Models',
-        'Generative AI',
-        'Retrieval-Augmented Generation',
-        'Full Stack Web Development',
-        'Next.js',
-        'React',
-        'TypeScript',
-        'JavaScript',
-        'Node.js',
-        'Python',
-        'Product UI/UX',
-      ],
-      sameAs: [
-        'https://github.com/HakkanShah',
-        'https://www.linkedin.com/in/hakkan/',
-        'https://g.dev/hakkan',
-        'https://hakkan.persist.org',
-      ],
-    },
+    personSchema(),
   ],
 };
 
@@ -267,6 +185,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: REVEAL_SCRIPT }} />
+        {/* rel="me": the same person owns these profiles (IndieWeb identity,
+            used by search engines and Mastodon-style verification). */}
+        {PROFILES.map((profile) => (
+          <link key={profile.url} rel="me" href={profile.url} />
+        ))}
+        {/* A plain-text summary for AI agents (llmstxt.org). */}
+        <link rel="alternate" type="text/markdown" href="/llms.txt" title="Hakkan Shah — summary for AI agents" />
       </head>
       <body
         className={`${bangers.variable} ${comicNeue.variable} antialiased`}
