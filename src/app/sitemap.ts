@@ -1,21 +1,19 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
 
+const SITE_URL = 'https://hakkan.is-a.dev';
+
+/**
+ * One page, so one entry. The images ride along so Google Images can tie the
+ * profile photo and the share card to this page.
+ */
 export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = 'https://hakkan.is-a.dev'
-
     return [
         {
-            url: baseUrl,
+            url: `${SITE_URL}/`,
             lastModified: new Date(),
-            changeFrequency: 'monthly',
+            changeFrequency: 'weekly',
             priority: 1,
+            images: [`${SITE_URL}/profile.jpg`, `${SITE_URL}/og-hakkan-shah.jpg`],
         },
-        // Add other routes here if you have multiple pages
-        // {
-        //   url: `${baseUrl}/projects`,
-        //   lastModified: new Date(),
-        //   changeFrequency: 'weekly',
-        //   priority: 0.8,
-        // },
-    ]
+    ];
 }
