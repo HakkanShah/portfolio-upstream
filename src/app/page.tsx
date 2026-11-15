@@ -6,6 +6,8 @@ import FloatingElements from '@/components/floating-elements';
 import ScrollProgress from '@/components/scroll-progress';
 import CursorFollower from '@/components/cursor-follower';
 import AssistantWrapper from '@/components/assistant/assistant-wrapper';
+import FaqSection from '@/components/faq-section';
+import { HOME_DESCRIPTION, HOME_TITLE, PERSON_ID, SITE_URL, WEBSITE_ID, projectListSchema } from '@/lib/seo';
 
 // Lazy load below-the-fold sections for faster initial load
 const AboutSection = dynamic(() => import('@/components/about-section'));
@@ -27,6 +29,27 @@ const SectionLoader = () => (
     </div>
   </div>
 );
+
+/** What the home page is: one person's profile, with a list of his projects. */
+const HOME_STRUCTURED_DATA = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'ProfilePage',
+      '@id': `${SITE_URL}/#profilepage`,
+      url: `${SITE_URL}/`,
+      name: HOME_TITLE,
+      description: HOME_DESCRIPTION,
+      inLanguage: 'en',
+      isPartOf: { '@id': WEBSITE_ID },
+      mainEntity: { '@id': PERSON_ID },
+      primaryImageOfPage: { '@id': `${SITE_URL}/#profile-photo` },
+      hasPart: { '@id': `${SITE_URL}/#projects` },
+      dateModified: new Date().toISOString(),
+    },
+    projectListSchema(),
+  ],
+};
 
 export default function Home() {
   return (
@@ -58,6 +81,8 @@ export default function Home() {
         <Suspense fallback={<SectionLoader />}>
           <CertificationsSection />
         </Suspense>
+        <FaqSection />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(HOME_STRUCTURED_DATA) }} />
         <Suspense fallback={<SectionLoader />}>
           <ContactSection />
         </Suspense>

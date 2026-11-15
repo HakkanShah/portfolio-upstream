@@ -14,6 +14,7 @@ import Card3D from './3d-card';
 import { Eye, ExternalLink, Github, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { projectSlug } from '@/lib/seo';
 
 // Lazy load modal components
 const ProjectDetailsModal = dynamic(() => import('./project-details-modal'), { ssr: false });
@@ -83,10 +84,17 @@ const ProjectsSection = () => {
                         transition={{ duration: 0.6 }}
                       />
 
-                      {/* Title overlay */}
+                      {/* Title overlay: links to the project's own page (the
+                          rest of the image still opens the quick-look dialog) */}
                       <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
                         <h3 className="font-headline text-lg sm:text-xl md:text-2xl text-white tracking-wide drop-shadow-lg line-clamp-1">
-                          {project.title}
+                          <Link
+                            href={`/projects/${projectSlug(project)}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="hover:underline underline-offset-4"
+                          >
+                            {project.title}
+                          </Link>
                         </h3>
                       </div>
 
@@ -177,6 +185,12 @@ const ProjectsSection = () => {
               </AnimatedDiv>
             ))}
           </div>
+
+          <p className="mt-8 text-center">
+            <Link href="/projects" className="font-bold text-primary underline underline-offset-4 decoration-2 hover:text-accent">
+              See every project on its own page →
+            </Link>
+          </p>
 
           {/* View More Projects Button */}
           {hasMoreProjects && (
