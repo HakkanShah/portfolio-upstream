@@ -9,6 +9,9 @@
 
 import { analyze, type Analysis } from './analyzer';
 import {
+    projectTechAnswer,
+    projectSourceAnswer,
+    currentRoleAnswer,
     cardAnswer,
     contactAnswer,
     countAnswer,
@@ -100,8 +103,39 @@ const SALARY_ASK = /\b(?:salary|ctc|expected\s+pay|package|notice\s+period|rate\
 const CONTACT_ASK =
     /\b(?:contact|reach\s+(?:out|him)?|get\s+in\s+touch|connect\s+with|message\s+him|talk\s+to\s+him|hit\s+him\s+up|socials?)\b/i;
 
+/** "Where does he work?", "who does he work for" — the current role. */
+const EMPLOYER_ASK =
+    /\b(?:where\s+(?:does|is)\s+he\s+(?:work|working|employed)|who\s+does\s+he\s+work\s+for|current\s+(?:job|role|employer|company)|where\s+is\s+he\s+now)\b/i;
+
+/** A bare "his skills" / "tech stack" never reached the listing handler. */
+const SKILLS_ASK =
+    /\b(?:skills?|skillset|tech\s*stack|stack|technologies|toolset)\b/i;
+
+/** "His achievements", "what has he won" */
+const ACHIEVEMENT_ASK =
+    /\b(?:achievements?|accomplishments?|awards?|highlights|what\s+(?:has|did)\s+he\s+(?:achieved?|won|win)|proudest|biggest\s+wins?)\b/i;
+
+/** "Is he any good?", "why should I hire him", "what makes him different" */
+const WHY_HIM_ASK =
+    /\b(?:(?:why|should)\s+(?:should\s+)?(?:i|we|anyone|someone)\s+(?:hire|pick|choose|work\s+with)|why\s+(?:hire\s+)?him|is\s+he\s+(?:any\s+|a\s+|really\s+)?(?:good|great|talented|skilled|worth|legit|capable)|what\s+makes\s+him\s+(?:different|special|unique|stand\s+out|good)|his\s+(?:strengths?|strong\s+points?|usp)|how\s+good\s+is\s+he|what\s+sets\s+him\s+apart)\b/i;
+
+/** "His internships", "work history", "career so far" — the whole list. */
+const CAREER_ASK =
+    /\b(?:internships?|experience|work\s+history|career|jobs?|employment|past\s+roles?|previous\s+(?:roles?|companies|jobs?))\b/i;
+
+/** "AWS virtual internship" is a certificate, not a job. */
+const CERTIFICATE_HINT = /\b(?:virtual|certificat\w*|certs?|course|aws)\b/i;
+
+/** Asking for a project's code, as opposed to its live link. */
+const SOURCE_ASK = /\b(?:source(?:\s+code)?|code|repo(?:sitory)?|open\s*source|github)\b/i;
+
+const RESUME_ASK = /\b(?:resume|résumé|cv|curriculum\s+vitae)\b/i;
+
+const GITHUB_STATS_ASK =
+    /\b(?:github\s+(?:stats?|statistics|activity|numbers|streak|contributions?|graph)|(?:contribution|commit)\s+(?:streak|graph|calendar|history)|longest\s+streak|most\s+used\s+languages?)\b/i;
+
 const LOCATION_ASK =
-    /\b(?:where\s+(?:is|does|was)?\s*(?:he|hakkan)?\s*(?:live|lives|based|from|located|stay|stays)|location|which\s+city|hometown|what\s+city)\b/i;
+    /\b(?:where\s+(?:is|does|was)?\s*(?:he|hakkan)?\s*(?:live|lives|based|from|located|stay|stays)|location|which\s+(?:city|country)|hometown|what\s+(?:city|country)|time\s*zone|remote(?:ly)?|relocat\w*)\b/i;
 
 const ANOTHER_ASK = /\b(?:another|other|different|next|more)\s+(?:project|app|build|one)\b|\bsomething\s+else\b/i;
 
@@ -135,6 +169,19 @@ const nextAspect = (current: Aspect): Aspect => {
 const topContext = (cards: KnowledgeCard[]): string[] =>
     cards.slice(0, 4).map((card) => `## ${card.title}\n${card.body}`);
 
+/**
+ * An answer from a card by id — or null when that card doesn't exist.
+ *
+ * These used to be `getCardById(id)!`. The non-null assertion compiled fine
+ * and then threw in production for two ids the knowledge graph no longer
+ * built, so "where is he based" crashed the assistant. A missing card now
+ * just means the rule doesn't apply and retrieval gets its turn.
+ */
+const answerFromCard = (id: string, confidence: number): BrainAnswer | null => {
+    const card = getCardById(id);
+    return card ? cardAnswer(card, confidence) : null;
+};
+
 // ============ Main ============
 
 export interface BrainResult {
@@ -163,16 +210,22 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
 
     // --- 0. Empty input ---
     if (!normalized) {
-        const card = getCardById('meta:capabilities')!;
-        return finish(cardAnswer(card, 0.9));
+        const capabilities = answerFromCard('meta:capabilities', 0.9);
+        if (capabilities) return finish(capabilities);
     }
 
     // --- 1. Questions about the assistant itself ---
     if (analysis.kind === 'identity') {
-        return finish(cardAnswer(getCardById('meta:identity')!, 0.95), { card: 'meta:identity' });
+        {
+            const fromCard = answerFromCard('meta:identity', 0.95);
+            if (fromCard) return finish(fromCard, { card: 'meta:identity' });
+        }
     }
     if (analysis.kind === 'capabilities') {
-        return finish(cardAnswer(getCardById('meta:capabilities')!, 0.95), { card: 'meta:capabilities' });
+        {
+            const fromCard = answerFromCard('meta:capabilities', 0.95);
+            if (fromCard) return finish(fromCard, { card: 'meta:capabilities' });
+        }
     }
 
     // --- 2. Small talk ---
@@ -206,7 +259,10 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
             }
         }
         if (memory.lastTopic === 'projects') return finish(projectListAnswer(), { topic: 'projects' });
-        return finish(cardAnswer(getCardById('meta:capabilities')!, 0.7));
+        {
+            const fromCard = answerFromCard('meta:capabilities', 0.7);
+            if (fromCard) return finish(fromCard);
+        }
     }
 
     // --- 5. Page navigation ---
@@ -238,6 +294,20 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
     // --- 8. A specific project was named ---
     if (entities.project) {
         next.shownProjects = Array.from(new Set([...next.shownProjects, entities.project.slug]));
+        if (entities.tech && /^(?:does|do|is|was|did|has)\b/.test(normalized)) {
+            return finish(projectTechAnswer(entities.project, entities.tech), {
+                project: entities.project.slug,
+                aspect: 'tech',
+                topic: 'projects',
+            });
+        }
+        if (SOURCE_ASK.test(normalized)) {
+            return finish(projectSourceAnswer(entities.project), {
+                project: entities.project.slug,
+                aspect: 'link',
+                topic: 'projects',
+            });
+        }
         return finish(projectAnswer(entities.project, analysis.aspect), {
             project: entities.project.slug,
             aspect: analysis.aspect,
@@ -266,6 +336,18 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
         return finish(experienceAnswer(entities.company, analysis.aspect), { topic: 'experience' });
     }
 
+    // --- 10b. GitHub questions that are about the work, not the link ---
+    // Both mention GitHub or code, so the contact rule below used to answer
+    // them with a profile link.
+    if (/\bopen\s*source\b/.test(normalized)) {
+        const fromCard = answerFromCard('faq:open-source', 0.9);
+        if (fromCard) return finish(fromCard, { card: 'faq:open-source', topic: 'github' });
+    }
+    if (GITHUB_STATS_ASK.test(normalized)) {
+        const fromCard = answerFromCard('faq:github-stats', 0.9);
+        if (fromCard) return finish(fromCard, { card: 'faq:github-stats', topic: 'github' });
+    }
+
     // --- 11. Contact channels ---
     if (entities.channel && !analysis.superlative) {
         return finish(contactAnswer(entities.channel), { topic: 'contact' });
@@ -282,12 +364,42 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
         return finish(techYesNoAnswer(entities.tech), { topic: 'skills' });
     }
 
-    // --- 11b1. Open source ---
-    if (/\bopen\s*source\b/.test(normalized) && !entities.project) {
-        return finish(cardAnswer(getCardById('faq:open-source')!, 0.9), {
-            card: 'faq:open-source',
-            topic: 'github',
-        });
+    // --- 11a. Where he works, and what he works with ---
+    if (EMPLOYER_ASK.test(normalized) && !entities.project) {
+        return finish(currentRoleAnswer(), { topic: 'experience' });
+    }
+    if (
+        CAREER_ASK.test(normalized) &&
+        !/\buser\s+experience\b/.test(normalized) &&
+        !CERTIFICATE_HINT.test(normalized) &&
+        !entities.project &&
+        !entities.company &&
+        !entities.tech
+    ) {
+        return finish(listingAnswer('experience'), { topic: 'experience' });
+    }
+    if (RESUME_ASK.test(normalized) && !entities.project) {
+        const fromCard = answerFromCard('faq:resume', 0.92);
+        if (fromCard) return finish(fromCard, { card: 'faq:resume', topic: 'contact' });
+    }
+    if (
+        SKILLS_ASK.test(normalized) &&
+        !entities.project &&
+        !entities.tech &&
+        !entities.skillGroup &&
+        !entities.company
+    ) {
+        return finish(listingAnswer('skills'), { topic: 'skills' });
+    }
+
+    // --- 11b0. Achievements, and the "is he any good" family ---
+    if (WHY_HIM_ASK.test(normalized) && !entities.project) {
+        const fromCard = answerFromCard('faq:why-him', 0.9);
+        if (fromCard) return finish(fromCard, { card: 'faq:why-him', topic: 'about' });
+    }
+    if (ACHIEVEMENT_ASK.test(normalized) && !entities.project && !entities.company) {
+        const fromCard = answerFromCard('faq:achievements', 0.9);
+        if (fromCard) return finish(fromCard, { card: 'faq:achievements', topic: 'experience' });
     }
 
     // --- 11b2. Overviews, fun facts and details the portfolio doesn't publish ---
@@ -318,18 +430,22 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
 
     // --- 11c. "How do I reach him?" ---
     if (CONTACT_ASK.test(normalized) && !entities.project && !entities.company) {
-        return finish(cardAnswer(getCardById('contact:overview')!, 0.92), {
-            card: 'contact:overview',
-            topic: 'contact',
-        });
+        const fromCard = answerFromCard('contact:overview', 0.92);
+        if (fromCard) return finish(fromCard, { card: 'contact:overview', topic: 'contact' });
     }
 
     // --- 11d. The owner himself ---
     if (ABOUT_ASK.test(normalized) || ROLE_ASK.test(normalized)) {
-        return finish(cardAnswer(getCardById('about:summary')!, 0.92), { card: 'about:summary', topic: 'about' });
+        {
+            const fromCard = answerFromCard('about:summary', 0.92);
+            if (fromCard) return finish(fromCard, { card: 'about:summary', topic: 'about' });
+        }
     }
     if (LOCATION_ASK.test(normalized) && !entities.project) {
-        return finish(cardAnswer(getCardById('about:location')!, 0.92), { card: 'about:location', topic: 'about' });
+        {
+            const fromCard = answerFromCard('about:location', 0.92);
+            if (fromCard) return finish(fromCard, { card: 'about:location', topic: 'about' });
+        }
     }
 
     // --- 12. Education ---
@@ -368,8 +484,15 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
      * stray word ("won", "today") can pull one up for a question that has
      * nothing to do with the portfolio. Make it clear the bar before it wins.
      */
+    const isProse = Boolean(best?.card.id.startsWith('prose:'));
+    // `terms` also carries phrases; only the single words say how much was asked.
+    const queryWords = tokens.terms.filter((term) => !term.includes(' '));
+    // Two ways to clear it: a strong multi-word match, or a decent match that
+    // accounts for at least half of what was asked ("is he self taught").
+    const coversTheQuestion =
+        Boolean(best) && best.score >= 6 && best.matched.length >= Math.ceil(queryWords.length / 2);
     const proseIsConvincing =
-        !best?.card.id.startsWith('prose:') || (best.matched.length >= 2 && best.score >= 10);
+        !isProse || (best.matched.length >= 2 && best.score >= 10) || coversTheQuestion;
 
     if (
         results.length &&
@@ -396,7 +519,7 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
 export const welcomeAnswer = (): BrainAnswer =>
     buildAnswer(
         'welcome',
-        `Hey! 👋 I'm ${OWNER.firstName}'s portfolio assistant. I know his **${getProjects().length} projects**, his stack, his internships and how to reach him — ask me anything, or tap a suggestion below.`,
+        `Hey! 👋 I'm ${OWNER.firstName}'s portfolio assistant. I know his **${getProjects().length} projects**, his stack, his experience and how to reach him — ask me anything, or tap a suggestion below.`,
         {
             // Deliberately silent: nobody expects a website to start talking at
             // them. Answers are spoken; the greeting is not.

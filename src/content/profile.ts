@@ -117,9 +117,8 @@ A: OHMSchool and AURA — those are the Persist products with real users. After
 
 Q: What about the older projects on here?
 A: A lot of them are exactly what they look like — experiments from while I was
-   learning. Math-O-Matic was me testing JavaScript logic; Hit-The-Jhatu is a
-   prank game about my friends. I keep them up because pretending I started out
-   shipping production AI would be a lie.
+   learning. I keep them up because pretending I started out shipping
+   production AI would be a lie.
 
 Q: What's your strongest area?
 A: Agents that act on real interfaces, and the product UI that makes them

@@ -41,7 +41,7 @@ export type Superlative = 'latest' | 'best' | 'hardest' | 'first' | 'biggest' | 
 
 export type ContactChannel = 'email' | 'phone' | 'github' | 'linkedin' | 'googleDev' | null;
 
-export type CountTopic = 'projects' | 'repos' | 'certifications' | 'experience' | 'skills' | null;
+export type CountTopic = 'projects' | 'repos' | 'prs' | 'certifications' | 'experience' | 'skills' | null;
 
 export interface ExperienceEntry {
     role: string;
@@ -123,7 +123,7 @@ const ASPECT_PATTERNS: Array<[Aspect, RegExp]> = [
 
 const SUPERLATIVE_PATTERNS: Array<[Superlative, RegExp]> = [
     ['latest', /\b(?:latest|newest|recent|most\s+recent|last|current|new)\b/i],
-    ['best', /\b(?:best|favou?rite|favorite|top|flagship|coolest|most\s+impressive|proudest|standout|showcase|strongest|recommend)\b/i],
+    ['best', /\b(?:best|favou?rite|favorite|top|flagship|coolest|most\s+impressive|proudest|standout|showcase|strongest|recommend(?:ed)?|must\s+see|look\s+at\s+first|see\s+first|check\s+out\s+first|start\s+with|worth\s+(?:seeing|a\s+look|my\s+time))\b/i],
     ['hardest', /\b(?:hardest|toughest|most\s+(?:complex|difficult|challenging|technical)|challenging|complex)\b/i],
     ['first', /\b(?:first|earliest|oldest|started\s+with)\b/i],
     ['biggest', /\b(?:biggest|largest|most\s+ambitious|main)\b/i],
@@ -208,7 +208,8 @@ const detectChannel = (input: string): ContactChannel => {
 };
 
 const detectCountTopic = (normalized: string): CountTopic => {
-    if (/\brepo|repositor/.test(normalized)) return 'repos';
+    if (/\b(?:prs?|pull\s+requests?|merged)\b/.test(normalized)) return 'prs';
+    if (/\brepo|repositor|\bstreak|\bcommits?\b|\bcontributions?\b/.test(normalized)) return 'repos';
     if (/\bproject|app|build/.test(normalized)) return 'projects';
     if (/\bcertif|course|training/.test(normalized)) return 'certifications';
     if (/\binternship|job|compan|experience|role/.test(normalized)) return 'experience';

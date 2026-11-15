@@ -36,6 +36,8 @@ export const speechify = (markdown: string): string =>
             `${user.replace(/\./g, ' dot ')} at ${domain.replace(/\./g, ' dot ')}`
         )
         .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}]/gu, '')
+        // "…most recent first:" followed by a list reads as ":." once joined.
+        .replace(/[:;,]\s*\./g, '.')
         .replace(/\.\s*\./g, '.')
         .replace(/\s{2,}/g, ' ')
         .trim();
@@ -74,6 +76,63 @@ const projectLinks = (project: ProjectEntry): string => {
     ].filter(Boolean);
 
     return links.length ? `🔗 ${links.join(' · ')}` : '';
+};
+
+/**
+ * "Can I see the code for AURA?" — the repo link when there is one, and a
+ * straight "it isn't public" when there isn't, instead of a project summary
+ * that never mentions the code.
+ */
+export const projectSourceAnswer = (project: ProjectEntry): BrainAnswer => {
+    if (project.repoUrl) {
+        return answer(
+            'project:source',
+            `**${project.title}** is open source: [${project.repoUrl.replace(/^https?:\/\//, '')}](${project.repoUrl})`,
+            {
+                speak: `${project.title} is open source. I can open the repository for you.`,
+                chips: [`What is ${project.title}?`, `${project.title} tech stack`, 'Any open source work?'],
+                actions: [{ type: 'open_url', url: project.repoUrl, label: 'Source code' }],
+            }
+        );
+    }
+
+    return answer(
+        'project:source-private',
+        [
+            `The source for **${project.title}** isn't public.`,
+            project.liveUrl ? `You can still try it: [${project.title}](${project.liveUrl})` : '',
+            '',
+            `His personal projects are open on [GitHub](${OWNER.github}).`,
+        ].filter((line, index, lines) => line || lines[index - 1]).join('\n'),
+        {
+            speak: `The source for ${project.title} isn't public${project.liveUrl ? ', but you can try it live' : ''}. His personal projects are open on GitHub.`,
+            chips: [`What is ${project.title}?`, 'Any open source work?', 'Show another project'],
+            actions: project.liveUrl ? [{ type: 'open_url', url: project.liveUrl, label: `Open ${project.title}` }] : [],
+        }
+    );
+};
+
+/** "Does AURA use Python?" — a yes or no about one project's stack. */
+export const projectTechAnswer = (project: ProjectEntry, tech: TechEntry): BrainAnswer => {
+    const uses = tech.projects.includes(project.title);
+
+    return answer(
+        'project:tech-yesno',
+        [
+            uses
+                ? `**Yes** — **${project.title}** uses ${tech.label}.`
+                : `${tech.label} isn't in **${project.title}**'s listed stack.`,
+            '',
+            `**Stack:** ${project.tags.join(', ')}`,
+        ].join('\n'),
+        {
+            speak: uses
+                ? `Yes, ${project.title} uses ${tech.label}.`
+                : `${tech.label} isn't in ${project.title}'s listed stack. It runs on ${project.tags.slice(0, 4).join(', ')}.`,
+            chips: [`What is ${project.title}?`, `Which projects use ${tech.label}?`, 'Show another project'],
+            actions: projectActions(project),
+        }
+    );
 };
 
 export const projectAnswer = (project: ProjectEntry, aspect: Aspect): BrainAnswer => {
@@ -289,6 +348,30 @@ export const unknownTechAnswer = (term: string): BrainAnswer => {
     );
 };
 
+// ============ Roles ============
+
+/**
+ * His experience used to be all internships, and the wording said so
+ * everywhere. It now includes a full-time job, so the label is counted from
+ * the role titles instead of assumed.
+ */
+const isInternship = (role: { role: string }): boolean => /\bintern(?:ship)?\b/i.test(role.role);
+
+const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+export const roleCountLabel = (): string => {
+    const internships = EXPERIENCE.filter(isInternship).length;
+    const fullTime = EXPERIENCE.length - internships;
+    if (!internships) return plural(EXPERIENCE.length, 'role');
+    if (!fullTime) return plural(internships, 'internship');
+    return `${plural(EXPERIENCE.length, 'role')} (${fullTime} full-time, ${plural(internships, 'internship')})`;
+};
+
+/** A company name short enough to say: "UDRCRAFTS", not "UDRCRAFTS INDIA PVT. LTD." */
+const shortCompany = (company: string): string => company.split(/\s+(?:india|pvt|private|ltd|inc|llc)\b/i)[0].trim();
+
+const roleChips = (): string[] => EXPERIENCE.slice(0, 2).map((role) => `What did he do at ${shortCompany(role.company)}?`);
+
 // ============ Counts ============
 
 export const countAnswer = (topic: Analysis['countTopic']): BrainAnswer => {
@@ -324,8 +407,17 @@ export const countAnswer = (topic: Analysis['countTopic']): BrainAnswer => {
         case 'experience':
             return answer(
                 'count:experience',
-                `**${EXPERIENCE.length} internships** — ${EXPERIENCE.map((role) => `${role.role} at ${role.company} (${role.period})`).join(', and ')}.`,
-                { chips: ['What did he do at UDRCRAFTS?', 'Tell me about AIKing Solutions', 'Is he open to work?'] }
+                `**${roleCountLabel()}** — ${EXPERIENCE.map((role) => `${role.role} at ${shortCompany(role.company)} (${role.period.toLowerCase()})`).join(', ')}.`,
+                { chips: [...roleChips(), 'Is he open to work?'] }
+            );
+        case 'prs':
+            return answer(
+                'count:prs',
+                `**${GITHUB_STATS.totalPRs} merged pull requests** across ${GITHUB_STATS.publicRepos} public repositories, with a ${GITHUB_STATS.longestStreak.days}-day longest streak (${GITHUB_STATS.longestStreak.period}).`,
+                {
+                    actions: [{ type: 'navigate', target: 'github' }],
+                    chips: ['His GitHub profile', 'Any open source work?', 'List all projects'],
+                }
             );
         case 'skills': {
             const total = SKILLS.reduce((sum, group) => sum + group.skills.length, 0);
@@ -338,7 +430,7 @@ export const countAnswer = (topic: Analysis['countTopic']): BrainAnswer => {
         default:
             return answer(
                 'count:general',
-                `Quick numbers: **${PROJECTS.length} projects**, **${EXPERIENCE.length} internships**, **${CERTIFICATIONS.length} certifications**, and **${GITHUB_STATS.publicRepos} public GitHub repos**.`,
+                `Quick numbers: **${PROJECTS.length} projects**, **${roleCountLabel()}**, **${CERTIFICATIONS.length} certifications**, and **${GITHUB_STATS.publicRepos} public GitHub repos**.`,
                 { chips: ['List all projects', 'His experience', 'His certifications'] }
             );
     }
@@ -406,7 +498,13 @@ export const superlativeAnswer = (kind: Superlative, analysis: Analysis): BrainA
         case 'best':
         case 'biggest':
         default: {
-            const flagship = projects.find((project) => project.title === 'MockHick') ?? projects[0];
+            // data.ts is ordered newest and most prominent first, so the
+            // headline project follows that rather than a name hardcoded here
+            // — which is how this answer went stale and kept recommending an
+            // old project after the portfolio moved on.
+            const [flagship, ...rest] = projects;
+            const alsoWorthIt = rest.slice(0, 2);
+
             return answer(
                 'superlative:best',
                 [
@@ -414,13 +512,19 @@ export const superlativeAnswer = (kind: Superlative, analysis: Analysis): BrainA
                     '',
                     flagship.longDescription,
                     '',
-                    `${projectLinks(flagship)}`,
-                    '',
-                    `Also worth your time: **Commit Habit** (secure GitHub App) and **Throughput** (.NET 8 Windows utility) — they show range beyond web apps.`,
-                ].join('\n'),
+                    projectLinks(flagship),
+                    alsoWorthIt.length
+                        ? `\nAlso worth your time: ${alsoWorthIt.map((project) => `**${project.title}** (${project.category.toLowerCase()})`).join(' and ')}.`
+                        : '',
+                ].filter(Boolean).join('\n'),
                 {
                     confidence: 0.85,
-                    chips: [`Why did he build ${flagship.title}?`, 'Tell me about Commit Habit', 'List all projects'],
+                    chips: [
+                        `Why did he build ${flagship.title}?`,
+                        alsoWorthIt[0] ? `Tell me about ${alsoWorthIt[0].title}` : 'List all projects',
+                        'List all projects',
+                    ],
+                    actions: projectActions(flagship),
                 }
             );
         }
@@ -434,7 +538,7 @@ export const experienceAnswer = (role: ExperienceEntry, aspect: Aspect): BrainAn
         return answer(
             'experience:tech',
             `At **${role.company}** he worked with: ${role.details.technologies.join(', ')}.`,
-            { chips: ['What did he build there?', 'His other internship', 'His full tech stack'] }
+            { chips: ['What did he build there?', 'His other roles', 'His full tech stack'] }
         );
     }
 
@@ -453,7 +557,7 @@ export const experienceAnswer = (role: ExperienceEntry, aspect: Aspect): BrainAn
         {
             speak: `${role.role} at ${role.company}, ${role.period}. ${role.details.overview} He worked with ${role.details.technologies.slice(0, 4).join(', ')}.`,
             actions: [{ type: 'navigate', target: 'experience' }],
-            chips: ['His other internship', 'What tech did he use there?', 'Is he open to work?'],
+            chips: ['His other roles', 'What tech did he use there?', 'Is he open to work?'],
         }
     );
 };
@@ -568,7 +672,7 @@ export const listingAnswer = (topic: Analysis['listingTopic']): BrainAnswer => {
             return answer(
                 'listing:experience',
                 [
-                    `${OWNER.firstName} has done **${EXPERIENCE.length} developer internships**:`,
+                    `${OWNER.firstName}'s experience — **${roleCountLabel()}**, most recent first:`,
                     '',
                     ...EXPERIENCE.map(
                         (role) => `• **${role.role}** at **${role.company}** (${role.period}) — ${role.description}`
@@ -576,7 +680,7 @@ export const listingAnswer = (topic: Analysis['listingTopic']): BrainAnswer => {
                 ].join('\n'),
                 {
                     actions: [{ type: 'navigate', target: 'experience' }],
-                    chips: ['What did he do at UDRCRAFTS?', 'Tell me about AIKing Solutions', 'Is he open to work?'],
+                    chips: [...roleChips(), 'Is he open to work?'],
                 }
             );
     }
@@ -624,7 +728,7 @@ export const educationAnswer = (wantsScores: boolean): BrainAnswer => {
 export const greetingAnswer = (turn: number): BrainAnswer => {
     const text = turn === 0
         ? pick([
-            `Hey! 👋 I'm ${OWNER.firstName}'s portfolio assistant. Ask me about his projects, stack, internships or how to reach him.`,
+            `Hey! 👋 I'm ${OWNER.firstName}'s portfolio assistant. Ask me about his projects, stack, experience or how to reach him.`,
             `Hi there! 👋 I know ${OWNER.firstName}'s ${PROJECTS.length} projects, his stack and his experience inside out. What do you want to see?`,
         ])
         : pick([
@@ -712,6 +816,30 @@ export const notOnPortfolioAnswer = (topic: string, pointer: string): BrainAnswe
 
 // ============ Card fallback ============
 
+/** Where he works right now, with the earlier roles as a one-line trail. */
+export const currentRoleAnswer = (): BrainAnswer => {
+    const [current, ...earlier] = EXPERIENCE;
+    const actions: AssistantAction[] = [{ type: 'navigate', target: 'experience' }];
+
+    return answer(
+        'experience:current',
+        [
+            `He's a **${current.role}** at **${current.company}** right now.`,
+            '',
+            current.description,
+            earlier.length
+                ? `\nBefore that: ${earlier.map((role) => `${role.role} at ${shortCompany(role.company)}`).join(', and ')}.`
+                : '',
+        ].filter(Boolean).join('\n'),
+        {
+            speak: `He's a ${current.role} at ${current.company} right now. ${current.description}`,
+            confidence: 0.92,
+            actions,
+            chips: [`What did he do at ${shortCompany(current.company)}?`, 'His achievements', 'Is he open to work?'],
+        }
+    );
+};
+
 export const cardAnswer = (card: KnowledgeCard, confidence: number): BrainAnswer =>
     answer(`card:${card.id}`, card.body, {
         speak: card.speak ?? speechify(card.body),
@@ -730,13 +858,13 @@ export const unsureAnswer = (candidates: KnowledgeCard[], context: string[]): Br
         '',
         suggestions.length ? `Closest things I know:\n${suggestions.join('\n')}` : '',
         '',
-        `I can cover his **${PROJECTS.length} projects**, his **stack**, **${EXPERIENCE.length} internships**, **education**, **certifications** and **contact details** — or scroll you to any section.`,
+        `I can cover his **${PROJECTS.length} projects**, his **stack**, his **experience**, **education**, **certifications** and **contact details** — or scroll you to any section.`,
     ]
         .filter(Boolean)
         .join('\n');
 
     return answer('fallback:unsure', text, {
-        speak: `I'm not sure about that one. I'm built around ${OWNER.firstName}'s portfolio, so ask me about his projects, his stack, his internships, education, certifications or contact details.`,
+        speak: `I'm not sure about that one. I'm built around ${OWNER.firstName}'s portfolio, so ask me about his projects, his stack, his experience, education, certifications or contact details.`,
         confidence: 0.3,
         needsLLM: true,
         context,
