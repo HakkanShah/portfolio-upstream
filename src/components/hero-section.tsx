@@ -11,6 +11,7 @@ import { Download, RotateCcw, Trophy } from 'lucide-react';
 import { SiMongodb, SiReact, SiNodedotjs, SiNextdotjs, SiTypescript, SiOpenai, SiPython } from 'react-icons/si';
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Fragment, useState, useEffect, useRef } from 'react';
+import { track } from '@/lib/analytics/track';
 
 // Lazy load heavy components for better performance
 const GameHub = dynamic(() => import('./games/game-hub'), {
@@ -374,6 +375,7 @@ const HeroSection = () => {
   };
 
   const handleImageClick = () => {
+    track({ type: 'game_open', game: 'Game Hub' });
     setIsGameHubOpen(true);
   };
 
@@ -414,6 +416,7 @@ const HeroSection = () => {
 
     // Parse command
     const [command, ...args] = trimmedInput.toLowerCase().split(/\s+/);
+    track({ type: 'terminal_command', command: [command, args[0]].filter(Boolean).join(' ') });
 
     // Execute command
     switch (command) {
@@ -523,6 +526,7 @@ const HeroSection = () => {
 
       case 'resume':
         addOutput('success', '📄 Opening resume preview...');
+        track({ type: 'resume', via: 'terminal', kind: 'preview' });
         setIsResumeOpen(true);
         // Auto-close terminal
         setTimeout(() => {
@@ -834,7 +838,10 @@ const HeroSection = () => {
           <AnimatedDiv delay={400} className="mt-8 flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 sm:gap-6 order-4 md:order-4">
             <MagneticButton>
               <Button
-                onClick={() => setIsResumeOpen(true)}
+                onClick={() => {
+                  track({ type: 'resume', via: 'hero', kind: 'preview' });
+                  setIsResumeOpen(true);
+                }}
                 className="font-headline text-lg sm:text-xl tracking-wider border-2 border-foreground shadow-md hover:shadow-xl transition-all"
               >
                 <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />

@@ -25,6 +25,7 @@ import {
     checkMicrophonePermission,
     VoiceError,
 } from './voice-service';
+import { track } from '@/lib/analytics/track';
 
 // ============ Types ============
 
@@ -132,6 +133,9 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const [state, setState] = useState<AssistantState>('idle');
     const [caption, setCaption] = useState<Caption | null>(null);
     const [isOpen, setIsOpen] = useState(false);
+    useEffect(() => {
+        if (isOpen) track({ type: 'assistant_open' });
+    }, [isOpen]);
     const [voiceEnabled, setVoiceEnabledState] = useState(true);
     const [voiceSupported, setVoiceSupported] = useState(false);
     const [hasShownWelcome, setHasShownWelcome] = useState(false);
@@ -507,6 +511,7 @@ export const AssistantProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const processInput = useCallback(async (text: string) => {
         const trimmedText = text.trim();
         if (!trimmedText) return;
+        track({ type: 'assistant_question' });
 
         // Supersede anything still in flight — the visitor has moved on.
         abortRef.current?.abort();

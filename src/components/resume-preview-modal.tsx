@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Download, X, FileText } from 'lucide-react';
+import { track } from '@/lib/analytics/track';
 
 interface ResumePreviewModalProps {
   isOpen: boolean;
@@ -17,13 +18,15 @@ const ResumePreviewModal = ({ isOpen, onClose, resumeUrl }: ResumePreviewModalPr
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
-        handleDownload();
+        handleDownload(true);
       }, 1500); // Start download after 1.5s
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
-  const handleDownload = () => {
+  /** `automatic`: the download that follows opening the preview. */
+  const handleDownload = (automatic = false) => {
+    track(automatic ? { type: 'resume', kind: 'download' } : { type: 'resume', via: 'preview', kind: 'download' });
     const link = document.createElement('a');
     link.href = resumeUrl;
     link.download = 'Hakkan_Parbej_Shah_Resume.pdf';
@@ -56,7 +59,7 @@ const ResumePreviewModal = ({ isOpen, onClose, resumeUrl }: ResumePreviewModalPr
           
           <div className="flex items-center gap-2">
             <Button 
-              onClick={handleDownload}
+              onClick={() => handleDownload()}
               size="sm"
               className="hidden sm:flex gap-2 font-bold border-2 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-y-1 hover:shadow-none transition-all"
             >
@@ -85,7 +88,7 @@ const ResumePreviewModal = ({ isOpen, onClose, resumeUrl }: ResumePreviewModalPr
           {/* Mobile Download Button (Floating) */}
           <div className="absolute bottom-6 right-6 sm:hidden">
             <Button 
-              onClick={handleDownload}
+              onClick={() => handleDownload()}
               size="lg"
               className="rounded-full h-14 w-14 p-0 border-2 border-foreground shadow-lg"
             >
