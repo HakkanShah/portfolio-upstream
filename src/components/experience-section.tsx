@@ -31,6 +31,9 @@ const ExperienceSection = () => {
               For Resume
             </span>
             <button
+              role="switch"
+              aria-checked={isRealityMode}
+              aria-label="Show what each role was like in reality"
               onClick={() => setIsRealityMode(!isRealityMode)}
               className={`relative w-16 h-8 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background ${isRealityMode ? 'bg-rose-600' : 'bg-primary'
                 }`}

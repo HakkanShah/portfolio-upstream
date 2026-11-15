@@ -50,7 +50,7 @@ html {
     --card-foreground: 48 100% 98%;
     --popover: 20 5% 10%;
     --popover-foreground: 48 100% 98%;
-    --primary: 0 74% 54%; /* Retro Red - Dark */
+    --primary: 0 74% 51%; /* Retro Red - Dark. 51% not 54%: white text on it needs 4.5:1 contrast */
     --primary-foreground: 0 0% 100%;
     --secondary: 215 28% 17%;
     --secondary-foreground: 210 20% 98%;
@@ -222,9 +222,11 @@ html {
   50% { box-shadow: 0 0 25px rgba(74, 222, 128, 1); }
 }
 
+/* A fixed glow with a pulsing opacity: animating text-shadow itself
+   repaints on every frame, opacity runs on the compositor. */
 @keyframes terminal-arrow-glow {
-  0%, 100% { text-shadow: 0 0 10px rgba(74, 222, 128, 0.6); }
-  50% { text-shadow: 0 0 20px rgba(74, 222, 128, 0.9); }
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
 }
 
 @keyframes terminal-text-glitch {
@@ -253,6 +255,7 @@ html {
 }
 
 .animate-terminal-arrow-glow {
+  text-shadow: 0 0 14px rgba(74, 222, 128, 0.8);
   animation: terminal-arrow-glow 2s ease-in-out infinite;
 }
 
@@ -293,4 +296,88 @@ html {
 html {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
+}
+
+/* ============ Scroll reveal ============
+   Used by <AnimatedDiv>. `reveal-ready` is set on <html> by the head script
+   in app/layout.tsx only when it can also reveal things, so content is never
+   left hidden without JavaScript. The script marks an element
+   `data-revealed` once it is on screen, which runs the entrance. Only
+   opacity and transform animate, so it stays on the compositor. */
+[data-reveal='fade'] { --reveal-from: none; }
+[data-reveal='slide'] { --reveal-from: translate3d(0, 30px, 0); }
+[data-reveal='slideLeft'] { --reveal-from: translate3d(-30px, 0, 0); }
+[data-reveal='slideRight'] { --reveal-from: translate3d(30px, 0, 0); }
+[data-reveal='scale'] { --reveal-from: scale(0.8); }
+
+html.reveal-ready [data-reveal]:not([data-revealed]) {
+  opacity: 0;
+  transform: var(--reveal-from);
+}
+
+html.reveal-ready [data-reveal][data-revealed] {
+  /* backwards, not both: once finished the animation lets go, so it doesn't
+     hold a transform that would beat hover effects inside the element. */
+  animation: reveal-in var(--reveal-duration, 0.6s) cubic-bezier(0.25, 0.4, 0.25, 1) var(--reveal-delay, 0ms) backwards;
+}
+
+@keyframes reveal-in {
+  from { opacity: 0; transform: var(--reveal-from); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The hero name: each letter flips up in turn. CSS rather than JS so the
+   name animates (and is readable) before React has loaded. */
+.hero-letter {
+  display: inline-block;
+  transform-origin: bottom;
+  animation: hero-letter-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  animation-delay: calc(200ms + var(--i, 0) * 50ms);
+  transition: transform 0.1s ease-out, color 0.1s ease-out, text-shadow 0.1s ease-out;
+}
+.hero-letter:hover {
+  transform: translateY(-5px);
+  color: #ff0055;
+  text-shadow: 0 0 8px rgba(255, 0, 85, 0.5);
+}
+@keyframes hero-letter-in {
+  from { opacity: 0; transform: translateY(50px) rotateX(90deg); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Hero subtitle: each new phrase types in (clip) while it rises into place. */
+.subtitle-in {
+  animation:
+    subtitle-rise 0.8s ease-out both,
+    subtitle-type 1.5s linear both;
+}
+@keyframes subtitle-rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes subtitle-type {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+.subtitle-pop {
+  animation: subtitle-pop 0.3s ease-out var(--pop-delay, 0ms) backwards;
+}
+@keyframes subtitle-pop {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: none; }
+}
+/* The hero's typing caret. */
+.caret-blink {
+  animation: caret-blink 0.8s linear 1s infinite;
+}
+@keyframes caret-blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subtitle-in, .subtitle-pop, .caret-blink { animation: none; }
+  html.reveal-ready [data-reveal]:not([data-revealed]) { opacity: 1; transform: none; }
+  html.reveal-ready [data-reveal][data-revealed],
+  .hero-letter { animation: none; }
 }

@@ -1,66 +1,53 @@
-'use client';
-
 import { cn } from '@/lib/utils';
 import React from 'react';
-import { motion, Variants } from 'framer-motion';
 
 type AnimatedDivProps = {
   children: React.ReactNode;
   className?: string;
+  /** Milliseconds before the reveal starts once the element is on screen. */
   delay?: number;
   variant?: 'fade' | 'slide' | 'scale' | 'slideLeft' | 'slideRight';
+  /** Seconds. */
   duration?: number;
   as?: keyof React.JSX.IntrinsicElements;
 };
 
-const AnimatedDiv: React.FC<AnimatedDivProps> = ({ 
-  children, 
-  className, 
-  delay = 0, 
+/**
+ * Reveals its content when it scrolls into view.
+ *
+ * This used to be a framer-motion component that rendered at opacity 0 and
+ * only became visible once React had loaded and an observer fired. On a slow
+ * phone that left whole sections blank for seconds, and it is why the hero
+ * photo was the page's slowest paint. It is now plain markup: the effect is
+ * CSS (`[data-reveal]` in globals.css), started by a small script in the
+ * document head that runs before React does (see `REVEAL_SCRIPT` in
+ * app/layout.tsx). Without JavaScript nothing is hidden.
+ */
+const AnimatedDiv: React.FC<AnimatedDivProps> = ({
+  children,
+  className,
+  delay = 0,
   variant = 'slide',
   duration = 0.6,
-  as = 'div' 
+  as = 'div',
 }) => {
-  const variants: Record<string, Variants> = {
-    fade: {
-      hidden: { opacity: 0 },
-      visible: { opacity: 1 },
-    },
-    slide: {
-      hidden: { opacity: 0, y: 30 },
-      visible: { opacity: 1, y: 0 },
-    },
-    slideLeft: {
-      hidden: { opacity: 0, x: -30 },
-      visible: { opacity: 1, x: 0 },
-    },
-    slideRight: {
-      hidden: { opacity: 0, x: 30 },
-      visible: { opacity: 1, x: 0 },
-    },
-    scale: {
-      hidden: { opacity: 0, scale: 0.8 },
-      visible: { opacity: 1, scale: 1 },
-    },
-  };
-
-  const MotionComponent = motion[as as keyof typeof motion] as any;
+  // Every tag takes these three props; the cast just keeps TS from
+  // computing the union of all intrinsic elements' prop types.
+  const Tag = as as 'div';
 
   return (
-    <MotionComponent
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, margin: '-50px' }}
-      variants={variants[variant]}
-      transition={{
-        duration,
-        delay: delay / 1000,
-        ease: [0.25, 0.4, 0.25, 1],
-      }}
+    <Tag
+      data-reveal={variant}
       className={cn(className)}
+      style={
+        {
+          '--reveal-delay': `${delay}ms`,
+          '--reveal-duration': `${duration}s`,
+        } as React.CSSProperties
+      }
     >
       {children}
-    </MotionComponent>
+    </Tag>
   );
 };
 

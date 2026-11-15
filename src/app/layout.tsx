@@ -228,6 +228,36 @@ const STRUCTURED_DATA = {
   ],
 };
 
+/**
+ * Starts the scroll reveals used by <AnimatedDiv> as soon as the HTML is
+ * parsed, without waiting for React. It hides nothing itself: the
+ * `reveal-ready` class that lets the CSS hide not-yet-seen sections is only
+ * added when this script can also reveal them. Elements added later (the
+ * "view more projects" list) are picked up by the MutationObserver.
+ */
+const REVEAL_SCRIPT = `(function(){
+  if (!('IntersectionObserver' in window)) return;
+  var root = document.documentElement;
+  root.classList.add('reveal-ready');
+  var io = new IntersectionObserver(function (entries) {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].isIntersecting) {
+        entries[i].target.setAttribute('data-revealed', '');
+        io.unobserve(entries[i].target);
+      }
+    }
+  }, { rootMargin: '0px 0px -50px 0px' });
+  var seen = new WeakSet();
+  function scan() {
+    var els = document.querySelectorAll('[data-reveal]:not([data-revealed])');
+    for (var i = 0; i < els.length; i++) {
+      if (!seen.has(els[i])) { seen.add(els[i]); io.observe(els[i]); }
+    }
+  }
+  new MutationObserver(scan).observe(root, { childList: true, subtree: true });
+  scan();
+})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -235,6 +265,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: REVEAL_SCRIPT }} />
+      </head>
       <body
         className={`${bangers.variable} ${comicNeue.variable} antialiased`}
       >
