@@ -7,19 +7,23 @@ import { faqEntries, faqSchema } from '@/lib/faq';
  * "Questions people ask": direct answers about Hakkan, in the words search
  * engines and AI assistants quote. Server-rendered with native <details>, so
  * it ships no JavaScript and every answer is in the HTML even when closed.
+ *
+ * It lives on its own page (/faq) rather than the home page: visitors don't
+ * need it there, and hiding it on the home page while still serving it to
+ * search engines would be cloaking.
  */
 const FaqSection = () => {
   const entries = faqEntries();
 
   return (
-    <section id="faq" aria-labelledby="faq-title" className="section-padding border-b-4 border-foreground">
+    <section id="faq" aria-labelledby="faq-title" className="section-padding">
       <div className="section-container">
         <AnimatedDiv className="text-center mb-10 sm:mb-12">
-          <h2 id="faq-title" className="font-headline text-4xl sm:text-5xl md:text-6xl font-bold text-primary tracking-wider">
+          <h1 id="faq-title" className="font-headline text-4xl sm:text-5xl md:text-6xl font-bold text-primary tracking-wider drop-shadow-[2px_2px_0_hsl(var(--foreground))]">
             Questions People Ask
-          </h2>
+          </h1>
           <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base text-muted-foreground px-4">
-            The short answers, before you scroll back up for the long ones.
+            The short answers about Hakkan Shah. The long ones are on the <Link href="/" className="font-bold text-primary underline underline-offset-4">portfolio</Link>.
           </p>
         </AnimatedDiv>
 

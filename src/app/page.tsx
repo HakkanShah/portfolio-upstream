@@ -6,7 +6,6 @@ import FloatingElements from '@/components/floating-elements';
 import ScrollProgress from '@/components/scroll-progress';
 import CursorFollower from '@/components/cursor-follower';
 import AssistantWrapper from '@/components/assistant/assistant-wrapper';
-import FaqSection from '@/components/faq-section';
 import { HOME_DESCRIPTION, HOME_TITLE, PERSON_ID, SITE_URL, WEBSITE_ID, projectListSchema } from '@/lib/seo';
 
 // Lazy load below-the-fold sections for faster initial load
@@ -81,7 +80,6 @@ export default function Home() {
         <Suspense fallback={<SectionLoader />}>
           <CertificationsSection />
         </Suspense>
-        <FaqSection />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(HOME_STRUCTURED_DATA) }} />
         <Suspense fallback={<SectionLoader />}>
           <ContactSection />

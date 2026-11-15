@@ -86,7 +86,8 @@ export const faqEntries = (): FaqEntry[] => {
 
 export const faqSchema = () => ({
     '@type': 'FAQPage',
-    '@id': 'https://hakkan.is-a.dev/#faq',
+    '@id': 'https://hakkan.is-a.dev/faq#faq',
+    url: 'https://hakkan.is-a.dev/faq',
     mainEntity: faqEntries().map((entry) => ({
         '@type': 'Question',
         name: entry.question,

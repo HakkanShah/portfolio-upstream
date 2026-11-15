@@ -43,6 +43,7 @@ export const llmsSummary = (): string =>
         `- [All projects](${SITE_URL}/projects)`,
         `- [Experience, skills, education and certifications](${SITE_URL}/experience)`,
         `- [Contact](${SITE_URL}/contact)`,
+        `- [Frequently asked questions](${SITE_URL}/faq)`,
         `- [Full profile in plain text](${SITE_URL}/llms-full.txt): everything below in one file`,
         `- [Resume (PDF)](${SITE_URL}/Hakkan_Parbej_Shah_Resume.pdf)`,
         '',

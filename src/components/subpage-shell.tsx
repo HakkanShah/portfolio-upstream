@@ -12,6 +12,7 @@ export const SITE_PAGES = [
     { href: '/experience', label: 'Experience' },
     { href: '/experience#certifications', label: 'Certifications' },
     { href: '/contact', label: 'Contact' },
+    { href: '/faq', label: 'FAQ' },
 ] as const;
 
 export default function SubpageShell({ children }: { children: React.ReactNode }) {
@@ -23,7 +24,7 @@ export default function SubpageShell({ children }: { children: React.ReactNode }
                         {NAME}
                     </Link>
                     <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
-                        {SITE_PAGES.filter((page) => !page.href.includes('#')).map((page) => (
+                        {SITE_PAGES.filter((page) => !page.href.includes('#') && page.href !== '/faq').map((page) => (
                             <Link
                                 key={page.href}
                                 href={page.href}
