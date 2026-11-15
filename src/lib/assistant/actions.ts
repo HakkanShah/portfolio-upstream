@@ -11,6 +11,7 @@
  */
 
 import { getSectionId, type SectionId } from './sections';
+import { track } from '@/lib/analytics/track';
 
 export type AssistantAction =
     | { type: 'navigate'; target: SectionId; label?: string }
@@ -118,6 +119,7 @@ export const executeAction = (action: AssistantAction): ActionOutcome => {
         if (!isSafeUrl(action.url)) return { done: false, blocked: false };
 
         if (action.type === 'download') {
+            if (/\.pdf($|\?)/i.test(action.url)) track({ type: 'resume', via: 'assistant', kind: 'download' });
             const link = document.createElement('a');
             link.href = action.url;
             link.target = '_blank';

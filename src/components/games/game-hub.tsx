@@ -10,6 +10,7 @@ import FlappyHakkan from './flappy-hakkan';
 import TicTacToe from './tic-tac-toe';
 import MemoryMatch from './memory-match';
 import Snake from './snake';
+import { track } from '@/lib/analytics/track';
 
 interface GameHubProps {
     isOpen: boolean;
@@ -128,7 +129,10 @@ export default function GameHub({ isOpen, onClose, initialMaximized = false }: G
                                     key={game.id}
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
-                                    onClick={() => setActiveGame(game.id as GameType)}
+                                    onClick={() => {
+                                        track({ type: 'game_open', game: String(game.id) });
+                                        setActiveGame(game.id as GameType);
+                                    }}
                                     className={`flex flex-col items-center justify-center p-3 rounded-xl border ${game.border} ${game.bg} hover:bg-opacity-20 transition-all aspect-square`}
                                 >
                                     <game.icon className={`w-8 h-8 ${game.color} mb-2`} />

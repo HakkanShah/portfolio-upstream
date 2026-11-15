@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import heroPhoto from '@/assets/hakkan-shah.jpg';
 import dynamic from 'next/dynamic';
 import { SOCIAL_LINKS } from '@/lib/data';
 import AnimatedDiv from './animated-div';
@@ -10,6 +11,7 @@ import { Download, RotateCcw, Trophy } from 'lucide-react';
 import { SiMongodb, SiReact, SiNodedotjs, SiNextdotjs, SiTypescript, SiOpenai, SiPython } from 'react-icons/si';
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Fragment, useState, useEffect, useRef } from 'react';
+import { track } from '@/lib/analytics/track';
 
 // Lazy load heavy components for better performance
 const GameHub = dynamic(() => import('./games/game-hub'), {
@@ -183,8 +185,10 @@ const HeroVisual = ({
   smoothRotateY,
   className = ""
 }: HeroVisualProps) => {
+  // No entrance animation: this photo is the page's largest paint, and
+  // anything that starts it at opacity 0 delays it.
   return (
-    <AnimatedDiv delay={400} className={`relative flex flex-col justify-center items-center gap-4 ${className}`}>
+    <div className={`relative flex flex-col justify-center items-center gap-4 ${className}`}>
       {/* Background Blur - disabled animation with reduced motion */}
       <div className={`absolute bg-accent w-64 h-64 sm:w-80 sm:h-80 md:w-[30rem] md:h-[30rem] rounded-full blur-3xl opacity-30 pointer-events-none ${shouldReduceMotion ? '' : 'animate-pulse'}`}></div>
 
@@ -204,7 +208,10 @@ const HeroVisual = ({
         whileTap={!isGameHubOpen ? { scale: 0.98 } : {}}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       >
-        <AnimatePresence mode="wait">
+        {/* initial={false}: the photo is the page's largest paint, so it must
+            be visible in the server HTML instead of fading in after React
+            loads. The fade still runs when switching to and from the games. */}
+        <AnimatePresence mode="wait" initial={false}>
           {!isGameHubOpen ? (
             <motion.div
               key="image"
@@ -213,17 +220,18 @@ const HeroVisual = ({
               exit={{ opacity: 0 }}
               className="w-full h-full relative"
             >
-              <div className="absolute -inset-1 bg-gradient-to-r from-primary via-accent to-primary rounded-lg blur opacity-75 animate-gradient"></div>
+              <div className="absolute -inset-1 bg-gradient-to-r from-primary via-accent to-primary rounded-lg blur opacity-75"></div>
               <div className="relative w-full h-full rounded-lg overflow-hidden bg-background">
+                {/* Served from this site, not github.com: a remote image has to
+                    be fetched by the optimizer before the first byte reaches
+                    the visitor, and this is the page's largest paint. */}
                 <Image
-                  src="https://github.com/HakkanShah.png"
+                  src={heroPhoto}
                   alt="Hakkan Shah, Full Stack AI Engineer at Persist"
-                  width={400}
-                  height={400}
-                  sizes="(max-width: 768px) 60vw, 400px"
+                  sizes="(max-width: 640px) 288px, (max-width: 768px) 320px, 384px"
                   className="object-cover w-full h-full"
+                  placeholder="blur"
                   priority
-                  fetchPriority="high"
                 />
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="text-center px-4">
@@ -258,7 +266,7 @@ const HeroVisual = ({
           )}
         </AnimatePresence>
       </motion.div>
-    </AnimatedDiv>
+    </div>
   );
 };
 
@@ -288,6 +296,12 @@ const HeroSection = () => {
 
   // Cycling subtitle effect - smooth phrase switching
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
+  // The first phrase is server-rendered fully visible; every phrase after it
+  // (including phrase 0 again, after a full cycle) types in.
+  const [hasCycled, setHasCycled] = useState(false);
+  useEffect(() => {
+    if (currentPhraseIndex !== 0) setHasCycled(true);
+  }, [currentPhraseIndex]);
   const phraseData = [
     {
       text: "Full Stack AI Engineer",
@@ -361,6 +375,7 @@ const HeroSection = () => {
   };
 
   const handleImageClick = () => {
+    track({ type: 'game_open', game: 'Game Hub' });
     setIsGameHubOpen(true);
   };
 
@@ -401,6 +416,7 @@ const HeroSection = () => {
 
     // Parse command
     const [command, ...args] = trimmedInput.toLowerCase().split(/\s+/);
+    track({ type: 'terminal_command', command: [command, args[0]].filter(Boolean).join(' ') });
 
     // Execute command
     switch (command) {
@@ -510,6 +526,7 @@ const HeroSection = () => {
 
       case 'resume':
         addOutput('success', '📄 Opening resume preview...');
+        track({ type: 'resume', via: 'terminal', kind: 'preview' });
         setIsResumeOpen(true);
         // Auto-close terminal
         setTimeout(() => {
@@ -740,22 +757,10 @@ const HeroSection = () => {
     <section id="home" className="section-padding border-b-4 border-foreground overflow-hidden relative">
       <div className="section-container grid md:grid-cols-2 gap-10 items-center min-h-[70vh]">
         <div className="text-center md:text-left flex flex-col">
-          <motion.h1
-            className="font-headline text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-wider text-primary drop-shadow-[2px_2px_0_hsl(var(--foreground))] flex flex-wrap justify-center md:justify-start gap-x-[0.2em] gap-y-2 order-1"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: { opacity: 0 },
-              visible: {
-                opacity: 1,
-                transition: {
-                  staggerChildren: 0.05,
-                  delayChildren: 0.2
-                }
-              }
-            }}
-          >
-            {"Hakkan Shah".split(" ").map((word, i) => (
+          <h1 className="font-headline text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-wider text-primary drop-shadow-[2px_2px_0_hsl(var(--foreground))] flex flex-wrap justify-center md:justify-start gap-x-[0.2em] gap-y-2 order-1 [perspective:600px]">
+            {/* The letter flip-in and hover are CSS (.hero-letter in
+                globals.css), so the name shows up before React loads. */}
+            {"Hakkan Shah".split(" ").map((word, i, words) => (
               // The space is for crawlers and screen readers: each letter is
               // its own span, so without it the heading's text reads
               // "HakkanShah". Between flex items it takes no room on screen.
@@ -763,93 +768,60 @@ const HeroSection = () => {
               {i > 0 && ' '}
               <div className="flex whitespace-nowrap">
                 {word.split("").map((char, j) => (
-                  <motion.span
+                  <span
                     key={j}
-                    variants={{
-                      hidden: { opacity: 0, y: 50, rotateX: 90, filter: 'blur(10px)' },
-                      visible: {
-                        opacity: 1,
-                        y: 0,
-                        rotateX: 0,
-                        filter: 'blur(0px)',
-                        transition: {
-                          type: "spring",
-                          damping: 12,
-                          stiffness: 100,
-                          filter: { type: "tween", duration: 0.4, ease: "easeOut" }
-                        }
-                      }
-                    }}
-                    whileHover={{
-                      y: -5,
-                      color: '#ff0055',
-                      textShadow: '0 0 8px rgba(255,0,85,0.5)',
-                      transition: { duration: 0.1 }
-                    }}
-                    className="inline-block origin-bottom"
+                    className="hero-letter"
+                    style={{ '--i': words.slice(0, i).join('').length + j } as React.CSSProperties}
                   >
                     {char}
-                  </motion.span>
+                  </span>
                 ))}
               </div>
               </Fragment>
             ))}
-          </motion.h1>
+          </h1>
 
           {/* Cycling Subtitle with Tech Icons */}
           <div className="mt-4 flex items-center justify-center md:justify-start h-[40px] sm:h-[48px] md:h-[56px] order-2">
             <div className="overflow-hidden whitespace-nowrap relative">
-              <AnimatePresence mode="wait">
+              {/* The type-on entrance is CSS (.subtitle-in in globals.css), so
+                  it runs on the compositor instead of JS setting a clip-path
+                  every frame. framer-motion only handles the short exit. The
+                  first phrase ("Full Stack AI Engineer") is in the server HTML
+                  fully visible, for slow phones and for search engines. */}
+              <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={currentPhraseIndex}
-                  initial={{ opacity: 0, y: 20, width: 0 }}
-                  animate={{ opacity: 1, y: 0, width: "auto" }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{
-                    duration: 0.8,
-                    ease: "easeOut",
-                    width: { duration: 1.5, ease: "linear" }
-                  }}
-                  className="flex items-center gap-2 sm:gap-3"
+                  exit={{ opacity: 0, y: -20, transition: { duration: 0.3, ease: 'easeIn' } }}
+                  className={`flex items-center gap-2 sm:gap-3 ${hasCycled ? 'subtitle-in' : ''}`}
                 >
                   <p className="font-headline text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-wider text-accent">
                     {phraseData[currentPhraseIndex].text}
                   </p>
-                  {/* Arrow and Icons - hidden on mobile, visible from sm breakpoint */}
+                  {/* Arrow and icons: display:none on phones, where their animations then do not run */}
                   <div className="hidden sm:flex items-center gap-1.5 sm:gap-2">
-                    <motion.div
-                      initial={{ opacity: 0, x: -5 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.4, duration: 0.3 }}
-                      className="text-primary"
-                    >
+                    <div className={`text-primary ${hasCycled ? 'subtitle-pop' : ''}`} style={{ '--pop-delay': '400ms' } as React.CSSProperties}>
                       <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
-                    </motion.div>
+                    </div>
                     {phraseData[currentPhraseIndex].icons.map((icon, idx) => (
-                      <motion.div
+                      <div
                         key={idx}
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.5 + idx * 0.1, duration: 0.3 }}
+                        className={hasCycled ? 'subtitle-pop' : ''}
+                        style={{ '--pop-delay': `${500 + idx * 100}ms` } as React.CSSProperties}
                       >
                         <icon.Icon
                           className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7"
                           style={{ color: icon.color }}
                         />
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 </motion.div>
               </AnimatePresence>
             </div>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 1, 0] }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: "linear", delay: 1 }}
-              className="w-2 h-6 sm:h-8 md:h-10 bg-primary ml-1"
-            />
+            <div aria-hidden="true" className="caret-blink w-2 h-6 sm:h-8 md:h-10 bg-primary ml-1" />
           </div>
 
           {/* Hero Visual for Mobile - inserted between subtitle and terminal */}
@@ -866,7 +838,10 @@ const HeroSection = () => {
           <AnimatedDiv delay={400} className="mt-8 flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 sm:gap-6 order-4 md:order-4">
             <MagneticButton>
               <Button
-                onClick={() => setIsResumeOpen(true)}
+                onClick={() => {
+                  track({ type: 'resume', via: 'hero', kind: 'preview' });
+                  setIsResumeOpen(true);
+                }}
                 className="font-headline text-lg sm:text-xl tracking-wider border-2 border-foreground shadow-md hover:shadow-xl transition-all"
               >
                 <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -883,18 +858,25 @@ const HeroSection = () => {
             <div className="flex items-center space-x-3 sm:space-x-4">
               {SOCIAL_LINKS.map((social, index) => (
                 <AnimatedDiv key={social.name} delay={500 + index * 100} variant="scale">
-                  <Link href={social.url} target="_blank" rel="noopener noreferrer">
-                    <MagneticButton strength={0.3}>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label={social.name}
-                        className="border-2 border-foreground hover:bg-primary/10 transition-all hover:scale-110"
+                  {/* One link styled as a button. It was a <button> inside an
+                      <a>, which is invalid HTML and left the link unnamed. */}
+                  <MagneticButton strength={0.3}>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="icon"
+                      className="border-2 border-foreground hover:bg-primary/10 transition-all hover:scale-110"
+                    >
+                      <Link
+                        href={social.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={social.url.startsWith('mailto:') ? 'Email Hakkan' : `Hakkan on ${social.name}`}
                       >
                         <social.icon className="h-5 w-5 sm:h-6 sm:w-6" />
-                      </Button>
-                    </MagneticButton>
-                  </Link>
+                      </Link>
+                    </Button>
+                  </MagneticButton>
                 </AnimatedDiv>
               ))}
             </div>

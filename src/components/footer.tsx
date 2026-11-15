@@ -55,7 +55,12 @@ const Footer = () => {
                   whileHover={{ y: -5, scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <Link href={social.url} target="_blank" rel="noopener noreferrer">
+                  <Link
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={social.url.startsWith('mailto:') ? 'Email Hakkan' : `Hakkan on ${social.name}`}
+                  >
                     <div className="p-3.5 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(var(--primary),0.5)] transition-all duration-300 group relative overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                       <social.icon className="h-5 w-5 text-gray-400 group-hover:text-white relative z-10 transition-colors" />
@@ -79,6 +84,7 @@ const Footer = () => {
             >
               <Button 
                 onClick={scrollToTop}
+                aria-label="Back to top"
                 variant="outline" 
                 size="icon"
                 className="h-14 w-14 rounded-full border-2 border-white/10 bg-white/5 hover:bg-primary hover:border-primary hover:shadow-[0_0_20px_rgba(var(--primary),0.6)] text-gray-400 hover:text-white transition-all duration-300 group relative overflow-hidden"

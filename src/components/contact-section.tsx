@@ -11,6 +11,7 @@ import Link from 'next/link';
 import AnimatedDiv from './animated-div';
 import { useToast } from '@/hooks/use-toast';
 import { Form, FormControl, FormField, FormItem, FormMessage } from './ui/form';
+import { track } from '@/lib/analytics/track';
 
 const contactFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -39,6 +40,7 @@ const ContactSection = () => {
         body: JSON.stringify(data),
       });
       if (res.ok) {
+        track({ type: 'contact_form' });
         toast({
           title: 'Message Sent!',
           description: 'Thanks for reaching out! I will get back to you soon.',
