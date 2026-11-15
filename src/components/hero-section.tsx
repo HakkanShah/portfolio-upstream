@@ -9,7 +9,7 @@ import { Button } from './ui/button';
 import { Download, RotateCcw, Trophy } from 'lucide-react';
 import { SiMongodb, SiReact, SiNodedotjs, SiNextdotjs, SiTypescript, SiOpenai, SiPython } from 'react-icons/si';
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 
 // Lazy load heavy components for better performance
 const GameHub = dynamic(() => import('./games/game-hub'), {
@@ -756,7 +756,12 @@ const HeroSection = () => {
             }}
           >
             {"Hakkan Shah".split(" ").map((word, i) => (
-              <div key={i} className="flex whitespace-nowrap">
+              // The space is for crawlers and screen readers: each letter is
+              // its own span, so without it the heading's text reads
+              // "HakkanShah". Between flex items it takes no room on screen.
+              <Fragment key={i}>
+              {i > 0 && ' '}
+              <div className="flex whitespace-nowrap">
                 {word.split("").map((char, j) => (
                   <motion.span
                     key={j}
@@ -787,6 +792,7 @@ const HeroSection = () => {
                   </motion.span>
                 ))}
               </div>
+              </Fragment>
             ))}
           </motion.h1>
 
