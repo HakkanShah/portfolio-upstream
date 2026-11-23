@@ -22,9 +22,15 @@ export const LEGAL_NAME = 'Hakkan Parbej Shah';
 export const JOB_TITLE = 'Full Stack AI Engineer';
 export const LOCATION = 'Kolkata, India';
 export const OG_IMAGE = '/og-hakkan-shah.jpg';
-export const PROFILE_PHOTO = '/profile.jpg';
+/** Named after him: image search reads file names. */
+export const PROFILE_PHOTO = '/hakkan-shah.jpg';
 
-export const HOME_TITLE = 'Hakkan Shah – Full Stack AI Engineer & AI Agent Developer';
+/**
+ * Short on purpose: Google cut the longer one down to just the name. Every
+ * other page is "<page> | Hakkan Shah" (the layout's title template), so each
+ * sitelink gets its own label instead of a shared "Full Stack AI Engineer".
+ */
+export const HOME_TITLE = 'Hakkan Shah – Full Stack AI Engineer';
 export const HOME_DESCRIPTION =
     'Hakkan Shah is a Full Stack AI Engineer in India. He builds AI agents, LLM apps and full stack products with Next.js, TypeScript and Python. Creator of OHMSchool & AURA.';
 
@@ -53,6 +59,14 @@ export const projectSlug = (project: Pick<Project, 'title'>): string =>
 export const projectUrl = (project: Pick<Project, 'title'>) => `${SITE_URL}/projects/${projectSlug(project)}`;
 
 export const findProject = (slug: string): Project | undefined => PROJECTS.find((p) => projectSlug(p) === slug);
+
+/**
+ * The projects he leads with (data.ts order). Site-wide lists link these and
+ * then "all projects", so search engines see which pages matter most; linking
+ * all 13 equally is how AluChat ended up as a sitelink ahead of OHMSchool.
+ */
+export const FEATURED_PROJECT_COUNT = 5;
+export const featuredProjects = () => PROJECTS.slice(0, FEATURED_PROJECT_COUNT);
 
 /** Projects built at Persist rather than on his own. */
 const PERSIST_PRODUCTS = new Set(['OHMSchool', 'AURA']);

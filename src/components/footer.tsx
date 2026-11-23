@@ -6,7 +6,7 @@ import { ArrowUp, Terminal, Heart, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { SITE_PAGES } from '@/components/subpage-shell';
-import { projectSlug } from '@/lib/seo';
+import { featuredProjects, projectSlug } from '@/lib/seo';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -117,13 +117,16 @@ const Footer = () => {
             </ul>
           </div>
           <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-primary/80">All projects</p>
+            <p className="mb-3 text-xs font-bold uppercase tracking-widest text-primary/80">Featured projects</p>
             <ul className="flex flex-wrap gap-x-5 gap-y-2">
-              {PROJECTS.map((project) => (
+              {featuredProjects().map((project) => (
                 <li key={project.title}>
                   <Link href={`/projects/${projectSlug(project)}`} className="text-gray-400 hover:text-white">{project.title}</Link>
                 </li>
               ))}
+              <li>
+                <Link href="/projects" className="font-bold text-white hover:text-primary">All {PROJECTS.length} projects →</Link>
+              </li>
             </ul>
           </div>
         </div>

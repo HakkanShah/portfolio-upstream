@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import AnimatedDiv from './animated-div';
 import { faqEntries, faqSchema } from '@/lib/faq';
+import { NAME } from '@/lib/seo';
 
 /**
  * "Questions people ask": direct answers about Hakkan, in the words search
@@ -20,7 +21,7 @@ const FaqSection = () => {
       <div className="section-container">
         <AnimatedDiv className="text-center mb-10 sm:mb-12">
           <h1 id="faq-title" className="font-headline text-4xl sm:text-5xl md:text-6xl font-bold text-primary tracking-wider drop-shadow-[2px_2px_0_hsl(var(--foreground))]">
-            Questions People Ask
+            Questions About {NAME}
           </h1>
           <p className="mt-3 max-w-2xl mx-auto text-sm sm:text-base text-muted-foreground px-4">
             The short answers about Hakkan Shah. The long ones are on the <Link href="/" className="font-bold text-primary underline underline-offset-4">portfolio</Link>.

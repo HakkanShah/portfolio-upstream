@@ -137,7 +137,9 @@ const STRUCTURED_DATA = {
       name: NAME,
       // Not the legal name: Google picked it as the site name when it was listed
       // here. It stays on the Person, where it belongs.
-      alternateName: ['Hakkan Shah Portfolio', 'hakkan.is-a.dev'],
+      // Never the domain: given 'hakkan.is-a.dev' here, Google showed that as
+      // the site name instead of "Hakkan Shah".
+      alternateName: ['Hakkan Shah Portfolio'],
       description: DESCRIPTION,
       inLanguage: 'en',
       publisher: { '@id': PERSON_ID },

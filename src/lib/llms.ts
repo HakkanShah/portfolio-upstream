@@ -40,6 +40,7 @@ export const llmsSummary = (): string =>
         '## About',
         '',
         `- [Portfolio](${SITE_URL}/): the whole portfolio on one page`,
+        `- [About ${NAME}](${SITE_URL}/about): who he is, in his own words`,
         `- [All projects](${SITE_URL}/projects)`,
         `- [Experience, skills, education and certifications](${SITE_URL}/experience)`,
         `- [Contact](${SITE_URL}/contact)`,

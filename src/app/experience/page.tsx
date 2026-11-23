@@ -16,7 +16,7 @@ const TITLE = `Experience, Skills & Certifications – ${NAME}`;
 const DESCRIPTION = `${NAME}: ${JOB_TITLE} at ${CURRENT_ROLE.company}, earlier at ${EXPERIENCE.slice(1).map((r) => r.company.split(/\s+(?:india|pvt)\b/i)[0]).join(' and ')}. Skills, B.Tech CSE and ${CERTIFICATIONS.length} certifications.`;
 
 export const metadata: Metadata = {
-    title: { absolute: TITLE },
+    title: 'Experience & Certifications',
     description: DESCRIPTION,
     alternates: { canonical: '/experience' },
     // A page's openGraph replaces the layout's, so the share image is repeated here.

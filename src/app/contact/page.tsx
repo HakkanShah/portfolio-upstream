@@ -8,7 +8,7 @@ const TITLE = `Contact ${NAME}`;
 const DESCRIPTION = `Get in touch with ${NAME}, ${JOB_TITLE} at ${CURRENT_ROLE.company}: email ${PUBLIC_EMAIL}, LinkedIn, GitHub, or the contact form.`;
 
 export const metadata: Metadata = {
-    title: { absolute: `${TITLE} – ${JOB_TITLE}` },
+    title: 'Contact',
     description: DESCRIPTION,
     alternates: { canonical: '/contact' },
     // A page's openGraph replaces the layout's, so the share image is repeated here.

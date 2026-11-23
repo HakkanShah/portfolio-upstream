@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
 
   poweredByHeader: false,
 
+  // The profile photo was renamed for image search; the old URL is already
+  // indexed, so send it on rather than 404.
+  async redirects() {
+    return [{ source: '/profile.jpg', destination: '/hakkan-shah.jpg', permanent: true }];
+  },
+
   async headers() {
     return [
       {

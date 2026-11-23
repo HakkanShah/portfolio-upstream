@@ -23,6 +23,7 @@ export async function GET(req: Request) {
 
     const urlList = [
         `${SITE_URL}/`,
+        `${SITE_URL}/about`,
         `${SITE_URL}/projects`,
         `${SITE_URL}/experience`,
         `${SITE_URL}/contact`,

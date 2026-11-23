@@ -17,7 +17,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
             images: [`${SITE_URL}${PROFILE_PHOTO}`, `${SITE_URL}${OG_IMAGE}`],
         },
         // The standalone pages: what search engines show as sitelinks.
-        ...['/projects', '/experience', '/contact', '/faq'].map((path) => ({
+        ...['/about', '/projects', '/experience', '/contact', '/faq'].map((path) => ({
             url: `${SITE_URL}${path}`,
             lastModified: now,
             changeFrequency: 'monthly' as const,
