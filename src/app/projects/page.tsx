@@ -10,7 +10,7 @@ const TITLE = `Projects by ${NAME}`;
 const DESCRIPTION = `All ${PROJECTS.length} projects by ${NAME}, ${JOB_TITLE}: ${PROJECTS.slice(0, 4).map((p) => p.title).join(', ')} and more — AI agents, full stack web apps, Android and developer tools.`;
 
 export const metadata: Metadata = {
-    title: { absolute: `${TITLE} – AI, Full Stack & Android` },
+    title: 'Projects',
     description: DESCRIPTION,
     alternates: { canonical: '/projects' },
     // A page's openGraph replaces the layout's, so the share image is repeated here.

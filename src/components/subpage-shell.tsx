@@ -8,6 +8,7 @@ import { JOB_TITLE, NAME } from '@/lib/seo';
  * search engines turn into sitelinks under the main result.
  */
 export const SITE_PAGES = [
+    { href: '/about', label: 'About' },
     { href: '/projects', label: 'Projects' },
     { href: '/experience', label: 'Experience' },
     { href: '/experience#certifications', label: 'Certifications' },
@@ -19,22 +20,27 @@ export default function SubpageShell({ children }: { children: React.ReactNode }
     return (
         <div className="flex min-h-screen flex-col bg-background">
             <header className="sticky top-0 z-40 border-b-4 border-foreground bg-background/95 backdrop-blur">
-                <div className="section-container flex items-center justify-between gap-4 py-3">
+                {/* Phones: name and theme toggle on one row, the page links on a
+                    second. Wider screens: all on one row. */}
+                <div className="section-container flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
                     <Link href="/" className="font-headline text-2xl sm:text-3xl tracking-wider text-primary shrink-0">
                         {NAME}
                     </Link>
-                    <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
+                    <nav
+                        aria-label="Site"
+                        className="order-last flex w-full items-center justify-between sm:order-none sm:ml-auto sm:w-auto sm:justify-end sm:gap-2"
+                    >
                         {SITE_PAGES.filter((page) => !page.href.includes('#') && page.href !== '/faq').map((page) => (
                             <Link
                                 key={page.href}
                                 href={page.href}
-                                className="font-headline tracking-wide text-sm sm:text-base px-2 py-1 rounded hover:text-primary whitespace-nowrap"
+                                className="font-headline tracking-wide text-base px-1 sm:px-2 py-1 rounded hover:text-primary whitespace-nowrap"
                             >
                                 {page.label}
                             </Link>
                         ))}
-                        <ThemeToggle />
                     </nav>
+                    <ThemeToggle />
                 </div>
             </header>
 

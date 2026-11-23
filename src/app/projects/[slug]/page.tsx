@@ -15,6 +15,7 @@ import {
     PUBLIC_EMAIL,
     SITE_URL,
     WEBSITE_ID,
+    featuredProjects,
     findProject,
     isPersistProduct,
     projectSchema,
@@ -48,7 +49,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     const path = `/projects/${projectSlug(project)}`;
 
     return {
-        title: { absolute: `${title} – ${JOB_TITLE}` },
+        // "OHMSchool | Hakkan Shah" via the layout's template.
+        title: project.title,
         description,
         keywords: [project.title, ...project.tags, NAME, JOB_TITLE, `${project.title} ${NAME}`],
         alternates: { canonical: path },
@@ -76,7 +78,8 @@ export default async function ProjectPage({ params }: { params: Promise<Params> 
     if (!project) notFound();
 
     const index = PROJECTS.indexOf(project);
-    const others = PROJECTS.filter((p) => p !== project);
+    // The featured projects, not all twelve others: see featuredProjects().
+    const others = featuredProjects().filter((p) => p !== project).slice(0, 4);
     const next = PROJECTS[(index + 1) % PROJECTS.length];
     const persist = isPersistProduct(project);
     const url = projectUrl(project);
@@ -210,7 +213,7 @@ export default async function ProjectPage({ params }: { params: Promise<Params> 
                                 Next: {next.title} →
                             </Link>
                         </div>
-                        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             {others.map((other) => (
                                 <li key={other.title}>
                                     <Link
@@ -224,7 +227,7 @@ export default async function ProjectPage({ params }: { params: Promise<Params> 
                             ))}
                         </ul>
                         <Link href="/projects" className="mt-8 inline-flex items-center gap-2 font-bold hover:text-primary">
-                            <ArrowLeft className="h-4 w-4" /> All projects
+                            <ArrowLeft className="h-4 w-4" /> All {PROJECTS.length} projects
                         </Link>
                     </div>
                 </section>
