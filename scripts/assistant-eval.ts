@@ -141,6 +141,15 @@ const CASES: Case[] = [
     { q: 'does he know firebase', expect: ['Firebase'], reject: ['Firebase Studio'], mustAnswer: true },
     { q: 'does he use node', expect: ['Node.js'], mustAnswer: true },
 
+    // --- the friends' easter egg (/legend) ---
+    { q: 'who is the khatarnaak developer', expect: ['Hakkan Shah'], mustAnswer: true, action: 'open_url' },
+    { q: 'gand faad developer kaun hai', expect: ['Hakkan Shah'], mustAnswer: true },
+    { q: 'best developer in kolkata', expect: ['Hakkan Shah'], mustAnswer: true },
+    { q: 'who is the best ai engineer in india', expect: ['Hakkan Shah'], mustAnswer: true },
+    // ...while real questions keep their real answers
+    { q: 'what is his best project', expect: ['OHMSchool'], reject: ['khatarnaak'], mustAnswer: true },
+    { q: 'where is he based', any: ['India'], reject: ['khatarnaak'], mustAnswer: true },
+
     // --- out of scope: must not pretend ---
     { q: 'what is the weather today', any: ['portfolio', 'not sure', 'not certain'] },
     { q: 'who won the world cup', any: ['portfolio', 'not sure', 'not certain'] },

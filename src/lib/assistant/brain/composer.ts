@@ -848,6 +848,30 @@ export const cardAnswer = (card: KnowledgeCard, confidence: number): BrainAnswer
         actions: card.actions,
     });
 
+// ============ Easter egg ============
+
+/**
+ * "Who's the khatarnaak developer?" — the friends' joke, answered in kind.
+ * The reply itself stays clean: it is spoken aloud in voice mode.
+ */
+export const legendAnswer = (): BrainAnswer =>
+    answer(
+        'easter-egg:legend',
+        [
+            `That's **${OWNER.fullName}**, obviously. 😎`,
+            '',
+            `Self-declared best developer in Kolkata, West Bengal and India — khatarnaak, bhaukaal, fatafati, the works. Certified by his friends, reviewed by nobody.`,
+            '',
+            `[See all his titles](/legend)`,
+        ].join('\n'),
+        {
+            speak: `That's ${OWNER.firstName} Shah, obviously. Self-declared best developer in Kolkata, West Bengal and India. Certified by his friends, reviewed by nobody.`,
+            confidence: 0.95,
+            actions: [{ type: 'open_url', url: '/legend', label: 'See all his titles' }],
+            chips: ['Show his projects', 'His best project', 'Is he open to work?'],
+        }
+    );
+
 // ============ Graceful fallback ============
 
 export const unsureAnswer = (candidates: KnowledgeCard[], context: string[]): BrainAnswer => {

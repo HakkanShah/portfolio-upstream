@@ -9,6 +9,7 @@
 
 import { analyze, type Analysis } from './analyzer';
 import {
+    legendAnswer,
     projectTechAnswer,
     projectSourceAnswer,
     currentRoleAnswer,
@@ -134,6 +135,13 @@ const RESUME_ASK = /\b(?:resume|résumé|cv|curriculum\s+vitae)\b/i;
 const GITHUB_STATS_ASK =
     /\b(?:github\s+(?:stats?|statistics|activity|numbers|streak|contributions?|graph)|(?:contribution|commit)\s+(?:streak|graph|calendar|history)|longest\s+streak|most\s+used\s+languages?)\b/i;
 
+/**
+ * The slang titles on /legend, and "best developer in Kolkata"-style
+ * questions. Matched on the normalised text, so punctuation is already gone.
+ */
+const LEGEND_ASK =
+    /\b(?:khatarn[a]{1,2}k|khotornak|gaa?n?d\s*(?:faa?d|fat(?:a|ano))|gaar\s*fat\w*|bhaukaal|bhaukal|jhakaa?s|bawaal|fatafati|jompesh|dhasu|byapok|ghyam|badass|kick\s*ass|developers?\s+ka\s+baap|ek\s+number\s+(?:developer|engineer|coder|chhele)|goat\s+(?:developer|engineer|coder)|super\s+developer|legend(?:ary)?\s+(?:developer|engineer|coder)|(?:the\s+)?best\s+(?:developer|software\s+engineer|ai\s+engineer|engineer|coder|programmer|full\s*stack\s+developer)\s+(?:in|of)\s+(?:kolkata|calcutta|west\s+bengal|bengal|india|the\s+world|the\s+universe))\b/i;
+
 const LOCATION_ASK =
     /\b(?:where\s+(?:is|does|was)?\s*(?:he|hakkan)?\s*(?:live|lives|based|from|located|stay|stays)|location|which\s+(?:city|country)|hometown|what\s+(?:city|country)|time\s*zone|remote(?:ly)?|relocat\w*)\b/i;
 
@@ -212,6 +220,11 @@ export const respond = (input: string, memory: BrainMemory = createMemory()): Br
     if (!normalized) {
         const capabilities = answerFromCard('meta:capabilities', 0.9);
         if (capabilities) return finish(capabilities);
+    }
+
+    // --- 0b. The friends' joke: "who's the khatarnaak developer?" (see /legend) ---
+    if (LEGEND_ASK.test(normalized)) {
+        return finish(legendAnswer(), { topic: 'about' });
     }
 
     // --- 1. Questions about the assistant itself ---

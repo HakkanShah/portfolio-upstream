@@ -23,6 +23,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
             changeFrequency: 'monthly' as const,
             priority: 0.8,
         })),
+        // The joke page: indexable so friends can Google it, low priority,
+        // and linked from nowhere else on the site.
+        { url: `${SITE_URL}/legend`, lastModified: now, changeFrequency: 'yearly' as const, priority: 0.2 },
         ...PROJECTS.map((project, index) => ({
             url: projectUrl(project),
             lastModified: now,

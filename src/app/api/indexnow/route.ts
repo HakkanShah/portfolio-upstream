@@ -28,6 +28,7 @@ export async function GET(req: Request) {
         `${SITE_URL}/experience`,
         `${SITE_URL}/contact`,
         `${SITE_URL}/faq`,
+        `${SITE_URL}/legend`,
         `${SITE_URL}/llms.txt`,
         ...PROJECTS.map(projectUrl),
     ];
