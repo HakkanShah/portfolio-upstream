@@ -198,9 +198,11 @@ export default function RootLayout({
       <body
         className={`${bangers.variable} ${comicNeue.variable} antialiased`}
       >
+        {/* Follows the visitor's system light/dark setting until they pick
+            one with the toggle, which is then remembered. */}
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
